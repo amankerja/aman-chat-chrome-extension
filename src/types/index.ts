@@ -70,6 +70,9 @@ export interface PrivacySettings {
   blurAvatars: boolean
   blurMessages: boolean
   blurMedia: boolean
+  pinLockEnabled?: boolean
+  pinCode?: string
+  inactivityTimeout?: number
 }
 
 export interface FollowUpTask {
