@@ -1,17 +1,22 @@
 import { createApp, type App } from 'vue'
 import Sidebar from '../components/Sidebar.vue'
 import { initAutoReplyObserver } from '../utils/waAutomation'
+import { sidebarState, toggleSidebarState, openSidebar as openSidebarState } from '../utils/sidebarState'
 import '../content/styles.scss'
 
 let sidebarContainer: HTMLElement | null = null
 let sidebarApp: App<Element> | null = null
-let isOpen = false
 
 function injectScript(): void {
-  const script = document.createElement('script')
-  script.src = chrome.runtime.getURL('src/inject/index.ts')
-  script.onload = () => script.remove()
-  ;(document.head || document.documentElement).appendChild(script)
+  // Content scripts can't call chrome.scripting themselves, so we ask the
+  // background service worker to inject the MAIN-world script for us.
+  // (See src/inject/index.ts for why this replaced the old <script src>
+  // approach.)
+  chrome.runtime.sendMessage({ action: 'injectMainWorld' }, (response) => {
+    if (chrome.runtime.lastError || !response?.success) {
+      console.error('[AMAN CHAT] Main-world injection failed:', chrome.runtime.lastError)
+    }
+  })
 }
 
 function createSidebar(): void {
@@ -29,15 +34,11 @@ function createSidebar(): void {
 function toggleSidebar(): void {
   if (!sidebarContainer) {
     createSidebar()
-    isOpen = true
+    openSidebarState()
     return
   }
 
-  isOpen = !isOpen
-  const sidebar = sidebarContainer.querySelector('.ac-sidebar')
-  if (sidebar) {
-    sidebar.classList.toggle('is-open', isOpen)
-  }
+  toggleSidebarState()
 }
 
 function createToggleButton(): void {
@@ -182,7 +183,7 @@ function setupMessageListener(): void {
         break
 
       case 'getOpenStatus':
-        sendResponse({ isOpen })
+        sendResponse({ isOpen: sidebarState.isOpen })
         break
 
       case 'sendScheduledMessages':

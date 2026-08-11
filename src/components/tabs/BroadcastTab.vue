@@ -149,7 +149,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import type { BroadcastState } from '../../types'
 import { getBroadcastState, setBroadcastState } from '../../utils/storage'
 import { downloadCSV } from '../../utils/helpers'
@@ -193,6 +193,21 @@ async function loadSavedState() {
     broadcastState.value = saved
     if (saved.numbers.length > 0) {
       rawNumbers.value = saved.numbers.join('\n')
+    }
+  }
+}
+
+// Fix: previously the broadcast state was only loaded once on mount. If the
+// user switched to another tab mid-broadcast, this component would be
+// unmounted; when they came back, a brand-new component (with a brand-new
+// state ref) was created and never heard about progress made while it was
+// gone. Listening for chrome.storage.onChanged keeps the UI live no matter
+// how many times the tab is switched away and back.
+function handleStorageChange(changes: Record<string, chrome.storage.StorageChange>, areaName: string) {
+  if (areaName === 'local' && changes.wku_broadcast_state) {
+    const newState = changes.wku_broadcast_state.newValue as BroadcastState | undefined
+    if (newState) {
+      broadcastState.value = newState
     }
   }
 }
@@ -279,6 +294,11 @@ function downloadLogs() {
 
 onMounted(() => {
   loadSavedState()
+  chrome.storage.onChanged.addListener(handleStorageChange)
+})
+
+onUnmounted(() => {
+  chrome.storage.onChanged.removeListener(handleStorageChange)
 })
 </script>
 

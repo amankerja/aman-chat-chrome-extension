@@ -125,6 +125,7 @@ import { ref, computed, onMounted } from 'vue'
 import type { CRMContact } from '../../types'
 import { getCRMContacts, setCRMContacts } from '../../utils/storage'
 import { downloadCSV, parseCSV, formatDate } from '../../utils/helpers'
+import { openPhoneChat } from '../../utils/waAutomation'
 
 const contacts = ref<CRMContact[]>([])
 const searchQuery = ref('')
@@ -228,13 +229,32 @@ async function deleteContact(id: string) {
 }
 
 function openChat(phone: string) {
-  window.open(`https://web.whatsapp.com/send?phone=${phone}`, '_blank')
+  // Was window.open(..., '_blank'), which spawned a whole new browser tab
+  // (and a whole new WhatsApp Web session) instead of just switching the
+  // current chat. openPhoneChat() reuses WhatsApp Web's own router so it
+  // opens instantly in place, consistent with Dashboard's quick-chat and
+  // the Broadcast feature.
+  openPhoneChat(phone)
+}
+
+function csvField(value: string): string {
+  // Bug fix: names/notes containing a literal " were never escaped, which
+  // silently corrupted the exported CSV (fields shift when reopened in
+  // Excel/Sheets).
+  return `"${(value || '').replace(/"/g, '""')}"`
 }
 
 function exportContacts() {
   let csv = 'Name,Phone,Stage,Source,Tags,Notes\n'
   contacts.value.forEach(c => {
-    csv += `"${c.name}","${c.phone}","${c.stage}","${c.source}","${(c.tags || []).join(';')}", "${c.notes}"\n`
+    csv += [
+      csvField(c.name),
+      csvField(c.phone),
+      csvField(c.stage),
+      csvField(c.source),
+      csvField((c.tags || []).join(';')),
+      csvField(c.notes)
+    ].join(',') + '\n'
   })
   downloadCSV(csv, `crm-contacts-${Date.now()}.csv`)
 }

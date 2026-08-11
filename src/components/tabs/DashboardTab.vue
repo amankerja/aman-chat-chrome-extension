@@ -105,6 +105,8 @@
 import { ref, onMounted } from 'vue'
 import type { Analytics, FollowUpTask } from '../../types'
 import { getAnalytics, getFollowUpTasks, setFollowUpTasks, getCRMContacts, getPrivacySettings, setPrivacySettings } from '../../utils/storage'
+import { openPhoneChat } from '../../utils/waAutomation'
+import { isValidPhoneNumber } from '../../utils/helpers'
 
 const analytics = ref<Analytics>({
   totalSent: 0,
@@ -138,8 +140,15 @@ function openDirectChat() {
 
 function startQuickChat() {
   if (!quickPhone.value) return
-  const phone = quickPhone.value.replace(/[^0-9]/g, '')
-  window.open(`https://web.whatsapp.com/send?phone=${phone}`, '_blank')
+  if (!isValidPhoneNumber(quickPhone.value)) {
+    alert('Nomor HP tidak valid. Gunakan format internasional, contoh: 628123456789')
+    return
+  }
+  // Was window.open(..., '_blank') — opened a whole new tab/session instead
+  // of just switching the chat in the current WhatsApp Web tab.
+  openPhoneChat(quickPhone.value)
+  quickPhone.value = ''
+  showDirectChat.value = false
 }
 
 async function togglePrivacy() {

@@ -110,6 +110,7 @@ import {
   setIsPremium
 } from '../../utils/storage'
 import { downloadCSV } from '../../utils/helpers'
+import { verifyLicenseKey } from '../../utils/licensing'
 
 const privacy = ref<PrivacySettings>({
   blurChats: false,
@@ -134,13 +135,18 @@ async function savePrivacy() {
 }
 
 async function verifyLicense() {
-  if (licenseKey.value.trim().length >= 6) {
-    await setLicenseKey(licenseKey.value.trim())
+  // Was: any string 6+ characters long was accepted as a valid Premium
+  // license. Now checked against the AMAN-XXXX-XXXX-CCCC format + checksum
+  // (see src/utils/licensing.ts for why this still needs a real backend
+  // eventually).
+  const result = await verifyLicenseKey(licenseKey.value)
+  if (result.valid) {
+    await setLicenseKey(licenseKey.value.trim().toUpperCase())
     await setIsPremium(true)
     isPremium.value = true
     alert('Lisensi berhasil diverifikasi! Fitur Premium aktif.')
   } else {
-    alert('Kode lisensi tidak valid.')
+    alert('Kode lisensi tidak valid. Format yang benar: AMAN-XXXX-XXXX-XXXX')
   }
 }
 

@@ -47,7 +47,7 @@
   "web_accessible_resources": [
     {
       "matches": ["https://web.whatsapp.com/*"],
-      "resources": ["src/inject/index.ts", "icons/*"]
+      "resources": ["icons/*"]
     }
   ]
 }

@@ -1,5 +1,5 @@
 import { getAutoReplyEnabled, getAutoReplyMode, getAutoReplyRules, setAnalytics, getAnalytics, isExtensionValid } from './storage'
-import { formatTimestamp } from './helpers'
+import { formatTimestamp, debounce } from './helpers'
 
 export async function openPhoneChat(phone: string): Promise<void> {
   const cleanPhone = phone.replace(/[^0-9]/g, '')
@@ -310,7 +310,52 @@ export function stopRealBroadcast(): void {
 }
 
 // Auto Reply Engine
+//
+// Bug fixes vs the previous version:
+// 1. "Replies to old messages" — the old code only deduped by message id and
+//    had no concept of "seen before auto-reply was even turned on", so the
+//    very first message it looked at (which could be hours old) would get a
+//    reply. We now track a `chatKey` for whichever chat is open and, every
+//    time the open chat changes (including the very first run), we seed
+//    every message currently on screen into `processedMsgIds` WITHOUT
+//    replying. Only messages that arrive after that point are treated as
+//    "new".
+// 2. Memory leak — `processedMsgIds` grew forever for as long as the tab
+//    stayed open. It's now a bounded FIFO (MAX_TRACKED ids).
+// 3. CPU usage — a MutationObserver on the whole `document.body` with
+//    subtree:true fires very often on WhatsApp Web (typing indicators, read
+//    receipts, timestamps). The callback is now debounced, and the
+//    redundant 1.5s interval poll (which did the exact same work) has been
+//    replaced with a much less frequent safety-net interval.
+const MAX_TRACKED_IDS = 300
 const processedMsgIds = new Set<string>()
+let lastChatKey: string | null = null
+
+function rememberMsgId(id: string): void {
+  processedMsgIds.add(id)
+  if (processedMsgIds.size > MAX_TRACKED_IDS) {
+    const oldest = processedMsgIds.values().next().value
+    if (oldest !== undefined) processedMsgIds.delete(oldest)
+  }
+}
+
+function getCurrentChatKey(): string | null {
+  const header = document.querySelector('header [title]') || document.querySelector('#main header')
+  const label = header?.textContent?.trim()
+  return label ? label.slice(0, 100) : null
+}
+
+function getIncomingMessageNodes(): HTMLElement[] {
+  return Array.from(
+    document.querySelectorAll('div.message-in, [class*="message-in"], div[data-id^="false_"]')
+  ) as HTMLElement[]
+}
+
+function getMsgId(node: HTMLElement): string {
+  return node.getAttribute('data-id') ||
+    node.getAttribute('data-message-id') ||
+    (node.textContent || '').slice(-50)
+}
 
 export function checkAndAutoReply(): void {
   if (!isExtensionValid()) return
@@ -318,26 +363,33 @@ export function checkAndAutoReply(): void {
   getAutoReplyEnabled().then(async (enabled) => {
     if (!enabled) return
 
-    // Find all incoming message elements in active chat room
-    const incomingNodes = document.querySelectorAll('div.message-in, [class*="message-in"], div[data-id^="false_"]')
+    const incomingNodes = getIncomingMessageNodes()
     if (incomingNodes.length === 0) return
+
+    // If the open chat changed (including first activation), seed every
+    // message currently visible as "already seen" and skip replying this
+    // round — we only want to react to messages that arrive from now on.
+    const chatKey = getCurrentChatKey()
+    if (chatKey !== lastChatKey) {
+      lastChatKey = chatKey
+      for (const node of incomingNodes) {
+        rememberMsgId(getMsgId(node))
+      }
+      return
+    }
 
     const rules = await getAutoReplyRules()
     if (rules.length === 0) return
     const mode = await getAutoReplyMode()
 
     // Get the last incoming message element
-    const lastMsgNode = incomingNodes[incomingNodes.length - 1] as HTMLElement
-
-    // Generate or read unique message ID
-    const msgId = lastMsgNode.getAttribute('data-id') ||
-                  lastMsgNode.getAttribute('data-message-id') ||
-                  (lastMsgNode.textContent || '').slice(-50)
+    const lastMsgNode = incomingNodes[incomingNodes.length - 1]
+    const msgId = getMsgId(lastMsgNode)
 
     if (processedMsgIds.has(msgId)) return
 
     // Mark as processed so we don't reply multiple times
-    processedMsgIds.add(msgId)
+    rememberMsgId(msgId)
 
     // Extract text content
     const textEl = lastMsgNode.querySelector('.selectable-text') ||
@@ -375,16 +427,21 @@ export function checkAndAutoReply(): void {
   })
 }
 
+const debouncedCheck = debounce(() => checkAndAutoReply(), 400)
+
 export function initAutoReplyObserver(): void {
-  // 1. DOM Mutation Observer
+  // 1. DOM Mutation Observer (debounced so rapid bursts of WhatsApp's own
+  //    DOM churn only trigger one check instead of dozens).
   const observer = new MutationObserver(() => {
-    checkAndAutoReply()
+    debouncedCheck()
   })
 
   observer.observe(document.body, { childList: true, subtree: true })
 
-  // 2. Interval Fallback Scanner (runs every 1.5s)
+  // 2. Low-frequency safety-net poll, in case a relevant mutation is missed
+  //    (e.g. observer briefly disconnected). Much less aggressive than the
+  //    old 1.5s interval since the observer now does the real-time work.
   setInterval(() => {
     checkAndAutoReply()
-  }, 1500)
+  }, 5000)
 }

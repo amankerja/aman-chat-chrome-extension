@@ -1,5 +1,5 @@
 <template>
-  <div class="ac-sidebar" :class="{ 'is-open': isOpen }">
+  <div class="ac-sidebar" :class="{ 'is-open': sidebarState.isOpen }">
     <header class="ac-sidebar-header">
       <div class="ac-sidebar-brand">
         <div class="ac-logo-icon">
@@ -12,7 +12,7 @@
           <span class="ac-brand-tagline">part of amankerja.com</span>
         </div>
       </div>
-      <button class="ac-btn secondary sm" @click="closeSidebar">
+      <button class="ac-btn secondary sm" @click="closeSidebar()">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <line x1="18" y1="6" x2="6" y2="18"/>
           <line x1="6" y1="6" x2="18" y2="18"/>
@@ -45,6 +45,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { sidebarState, closeSidebar } from '../utils/sidebarState'
 import DashboardTab from './tabs/DashboardTab.vue'
 import TemplatesTab from './tabs/TemplatesTab.vue'
 import AutoReplyTab from './tabs/AutoReplyTab.vue'
@@ -52,7 +53,6 @@ import BroadcastTab from './tabs/BroadcastTab.vue'
 import CRMTab from './tabs/CRMTab.vue'
 import SettingsTab from './tabs/SettingsTab.vue'
 
-const isOpen = ref(true)
 const activeTab = ref('dashboard')
 
 const tabs = [
@@ -63,10 +63,6 @@ const tabs = [
   { id: 'crm', name: 'CRM' },
   { id: 'settings', name: 'Pengaturan' }
 ]
-
-function closeSidebar() {
-  isOpen.value = false
-}
 
 onMounted(() => {
   console.log('[AMAN CHAT] Sidebar component mounted')

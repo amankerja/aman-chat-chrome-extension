@@ -1,4 +1,5 @@
 import { initializeStorage, DEFAULT_TEMPLATES } from '../utils/storage'
+import { amanChatMainWorldInject } from '../inject/index'
 
 chrome.runtime.onInstalled.addListener((details: chrome.runtime.InstalledDetails) => {
   console.log('[AMAN CHAT] Extension installed:', details.reason, 'v3.0.0')
@@ -121,6 +122,23 @@ chrome.runtime.onMessage.addListener((
         chrome.storage.local.set({ [message.key]: message.value }, () => {
           sendResponse({ success: true })
         })
+      }
+      return true
+
+    case 'injectMainWorld':
+      if (_sender.tab?.id) {
+        chrome.scripting.executeScript({
+          target: { tabId: _sender.tab.id },
+          world: 'MAIN',
+          func: amanChatMainWorldInject
+        }).then(() => {
+          sendResponse({ success: true })
+        }).catch((err) => {
+          console.error('[AMAN CHAT] Failed to inject main-world script:', err)
+          sendResponse({ success: false })
+        })
+      } else {
+        sendResponse({ success: false })
       }
       return true
   }
