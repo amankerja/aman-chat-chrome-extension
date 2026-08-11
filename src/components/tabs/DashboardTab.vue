@@ -1,60 +1,101 @@
 <template>
   <div class="ac-dashboard">
+    <!-- Header Title & Date Filter -->
     <div class="ac-section-header">
-      <h2 class="ac-section-title">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="7" height="9" rx="1"/>
-          <rect x="14" y="3" width="7" height="5" rx="1"/>
-          <rect x="14" y="12" width="7" height="9" rx="1"/>
-          <rect x="3" y="16" width="7" height="5" rx="1"/>
-        </svg>
-        Dashboard Laporan & Analitik
-      </h2>
-      <div style="display: flex; gap: 6px;">
-        <button class="ac-btn secondary sm" @click="exportReportCSV">📊 Ekspor Laporan</button>
-        <button class="ac-btn secondary sm" @click="refreshData">Refresh</button>
+      <div>
+        <h2 class="ac-dashboard-title">Ringkasan Hari Ini</h2>
+        <span class="ac-subtext">Pantau statistik aktivitas WhatsApp Business Anda secara real-time</span>
+      </div>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <select class="ac-select-sm">
+          <option>Hari Ini ▾</option>
+          <option>7 Hari Terakhir</option>
+          <option>30 Hari Terakhir</option>
+        </select>
+        <button class="ac-btn secondary sm" @click="exportReportCSV">📊 Ekspor</button>
       </div>
     </div>
 
-    <!-- Metrics Grid -->
+    <!-- 4 Statistics Cards -->
     <div class="ac-grid-4">
-      <div class="ac-stat-box">
-        <span class="ac-stat-label">Pesan Terkirim</span>
-        <span class="ac-stat-value">{{ analytics.totalSent }}</span>
+      <div class="ac-stat-card">
+        <div class="ac-stat-card-header">
+          <span class="ac-stat-card-title">Pesan Terkirim</span>
+          <span class="ac-stat-card-icon">📤</span>
+        </div>
+        <div class="ac-stat-card-value">{{ analytics.totalSent }}</div>
+        <div class="ac-trend-badge green">
+          <span>↑ 14%</span> vs kemarin
+        </div>
       </div>
-      <div class="ac-stat-box">
-        <span class="ac-stat-label">Berhasil</span>
-        <span class="ac-stat-value" style="color: #15803d;">{{ analytics.totalSuccess }}</span>
+
+      <div class="ac-stat-card">
+        <div class="ac-stat-card-header">
+          <span class="ac-stat-card-title">Berhasil</span>
+          <span class="ac-stat-card-icon">✅</span>
+        </div>
+        <div class="ac-stat-card-value text-green">{{ analytics.totalSuccess }}</div>
+        <div class="ac-trend-badge green">
+          <span>{{ successRate }}%</span> success rate
+        </div>
       </div>
-      <div class="ac-stat-box">
-        <span class="ac-stat-label">Auto Reply</span>
-        <span class="ac-stat-value" style="color: #2563eb;">{{ analytics.autoRepliesTriggered }}</span>
+
+      <div class="ac-stat-card">
+        <div class="ac-stat-card-header">
+          <span class="ac-stat-card-title">Auto Reply</span>
+          <span class="ac-stat-card-icon">🤖</span>
+        </div>
+        <div class="ac-stat-card-value text-blue">{{ analytics.autoRepliesTriggered }}</div>
+        <div class="ac-trend-badge green">
+          <span>↑ 8%</span> ditrigger
+        </div>
       </div>
-      <div class="ac-stat-box">
-        <span class="ac-stat-label">Kontak CRM</span>
-        <span class="ac-stat-value">{{ crmCount }}</span>
+
+      <div class="ac-stat-card">
+        <div class="ac-stat-card-header">
+          <span class="ac-stat-card-title">Kontak CRM</span>
+          <span class="ac-stat-card-icon">👥</span>
+        </div>
+        <div class="ac-stat-card-value">{{ crmCount }}</div>
+        <div class="ac-trend-badge gray">
+          <span>Pelanggan</span> tersimpan
+        </div>
       </div>
     </div>
 
-    <!-- Success Rate & Performance Card -->
+    <!-- Activity Timeline -->
     <div class="ac-card">
       <div class="ac-section-header">
-        <h3 class="ac-label">Tingkat Keberhasilan Pengiriman</h3>
-        <span class="ac-badge loading" style="font-size: 0.72rem;">{{ successRate }}% Sukses</span>
+        <h3 class="ac-label">Aktivitas Terkini (Timeline)</h3>
+        <button class="ac-btn secondary sm" @click="refreshData">Refresh</button>
       </div>
 
-      <div class="ac-progress-bar-bg" style="margin-top: 8px;">
-        <div class="ac-progress-bar-fill" :style="{ width: successRate + '%' }"></div>
-      </div>
-
-      <div class="ac-grid-2" style="margin-top: 10px;">
-        <div style="display: flex; flex-direction: column;">
-          <span class="ac-subtext">Total Kampanye Broadcast</span>
-          <span class="ac-stat-value" style="font-size: 1rem;">{{ analytics.campaignsCount }} Kampanye</span>
+      <div class="ac-activity-timeline">
+        <div class="ac-activity-item">
+          <span class="ac-activity-time">Baru Saja</span>
+          <span class="ac-activity-icon">📢</span>
+          <div class="ac-activity-content">
+            <span class="ac-activity-title">Broadcast Massal</span>
+            <span class="ac-activity-desc">Kampanye {{ analytics.campaignsCount }} berjalan aktif dengan rotasi Spintax</span>
+          </div>
         </div>
-        <div style="display: flex; flex-direction: column; text-align: right;">
-          <span class="ac-subtext">Gagal Kirim</span>
-          <span class="ac-stat-value" style="font-size: 1rem; color: #b91c1c;">{{ analytics.totalFailed }} Pesan</span>
+        <div class="ac-activity-divider"></div>
+        <div class="ac-activity-item">
+          <span class="ac-activity-time">5 mnt lalu</span>
+          <span class="ac-activity-icon">🤖</span>
+          <div class="ac-activity-content">
+            <span class="ac-activity-title">Auto Reply Ditrigger</span>
+            <span class="ac-activity-desc">Kata kunci cocok diproses dalam jeda cooldown</span>
+          </div>
+        </div>
+        <div class="ac-activity-divider"></div>
+        <div class="ac-activity-item">
+          <span class="ac-activity-time">15 mnt lalu</span>
+          <span class="ac-activity-icon">🔒</span>
+          <div class="ac-activity-content">
+            <span class="ac-activity-title">Privasi & Security Blur</span>
+            <span class="ac-activity-desc">Proteksi blur chat aktif untuk keamanan percakapan</span>
+          </div>
         </div>
       </div>
     </div>

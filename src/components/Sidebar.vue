@@ -1,5 +1,6 @@
 <template>
   <div class="ac-sidebar" :class="{ 'is-open': sidebarState.isOpen }">
+    <!-- Header Area (72px) -->
     <header class="ac-sidebar-header">
       <div class="ac-sidebar-brand">
         <div class="ac-logo-icon">
@@ -8,28 +9,22 @@
           </svg>
         </div>
         <div class="ac-brand-text">
-          <span class="ac-brand-name">AMAN CHAT</span>
-          <span class="ac-brand-tagline">amankerja.com</span>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span class="ac-brand-name">AMAN CHAT</span>
+            <span class="ac-version-badge">v3.0 Pro</span>
+          </div>
+          <div style="display: flex; align-items: center; gap: 4px; margin-top: 2px;">
+            <span class="ac-online-dot"></span>
+            <span class="ac-brand-tagline">WhatsApp Business Active</span>
+          </div>
         </div>
       </div>
 
-      <nav class="ac-sidebar-nav">
-        <button
-          v-for="tab in tabs"
-          :key="tab.id"
-          class="ac-nav-tab"
-          :class="{ active: activeTab === tab.id }"
-          @click="activeTab = tab.id"
-        >
-          {{ tab.name }}
-        </button>
-      </nav>
-
-      <div style="display: flex; gap: 8px; align-items: center; flex-shrink: 0;">
-        <button class="ac-btn secondary sm" style="padding: 4px 10px; font-size: 0.75rem;" @click="showOnboarding = true" title="Panduan & Onboarding Tour">
+      <div style="display: flex; gap: 6px; align-items: center;">
+        <button class="ac-btn secondary sm" style="padding: 4px 8px; font-size: 0.72rem;" @click="showOnboarding = true" title="Panduan & Onboarding Tour">
           🚀 Tour
         </button>
-        <button class="ac-btn secondary sm" @click="closeSidebar()" title="Tutup Panel (Alt+A)">
+        <button class="ac-btn secondary sm ac-close-btn" @click="closeSidebar()" title="Tutup Panel (Alt+A)">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"/>
             <line x1="6" y1="6" x2="18" y2="18"/>
@@ -38,20 +33,42 @@
       </div>
     </header>
 
-    <!-- Shortcut Keys Bar -->
-    <div class="ac-shortcut-bar">
-      <span>💡 Shortcut: </span>
-      <kbd>Alt+D</kbd> Dashboard <kbd>Alt+B</kbd> Broadcast <kbd>Alt+R</kbd> Auto Reply <kbd>Alt+T</kbd> Template <kbd>Alt+C</kbd> CRM <kbd>Alt+P</kbd> Privacy Blur
-    </div>
+    <!-- Icon Navigation Grid (2 Rows) -->
+    <nav class="ac-sidebar-nav">
+      <div class="ac-nav-grid">
+        <button
+          v-for="tab in tabs"
+          :key="tab.id"
+          class="ac-nav-card"
+          :class="{ active: activeTab === tab.id }"
+          @click="activeTab = tab.id"
+        >
+          <span class="ac-nav-icon">{{ tab.icon }}</span>
+          <span class="ac-nav-label">{{ tab.name }}</span>
+        </button>
+      </div>
+    </nav>
 
+    <!-- Content Area -->
     <main class="ac-sidebar-content">
-      <DashboardTab v-if="activeTab === 'dashboard'" />
+      <DashboardTab v-if="activeTab === 'dashboard'" @open-broadcast="activeTab = 'broadcast'" />
       <TemplatesTab v-else-if="activeTab === 'templates'" />
       <AutoReplyTab v-else-if="activeTab === 'autoreply'" />
       <BroadcastTab v-else-if="activeTab === 'broadcast'" />
       <CRMTab v-else-if="activeTab === 'crm'" />
-      <SettingsTab v-else-if="activeTab === 'settings'" />
+      <SettingsTab v-else-if="activeTab === 'settings' || activeTab === 'scheduler' || activeTab === 'contacts'" />
     </main>
+
+    <!-- Sticky Bottom Action Button -->
+    <footer class="ac-sidebar-footer">
+      <button class="ac-btn-gradient-green" @click="activeTab = 'broadcast'">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 12A10 10 0 0 0 12 2v10z"/>
+          <path d="M12 2A10 10 0 0 0 2 12h10z"/>
+        </svg>
+        + Buat Broadcast Baru
+      </button>
+    </footer>
 
     <!-- Interactive Onboarding Modal -->
     <div v-if="showOnboarding" class="ac-modal-overlay">
@@ -132,12 +149,14 @@ const showOnboarding = ref(false)
 const onboardingStep = ref(1)
 
 const tabs = [
-  { id: 'dashboard', name: 'Dashboard' },
-  { id: 'templates', name: 'Template' },
-  { id: 'autoreply', name: 'Auto Reply' },
-  { id: 'broadcast', name: 'Broadcast' },
-  { id: 'crm', name: 'CRM' },
-  { id: 'settings', name: 'Pengaturan' }
+  { id: 'dashboard', name: 'Dashboard', icon: '📊' },
+  { id: 'broadcast', name: 'Broadcast', icon: '📢' },
+  { id: 'templates', name: 'Template', icon: '📄' },
+  { id: 'autoreply', name: 'Auto Reply', icon: '🤖' },
+  { id: 'crm', name: 'CRM', icon: '👥' },
+  { id: 'scheduler', name: 'Scheduler', icon: '⏰' },
+  { id: 'contacts', name: 'Kontak', icon: '📱' },
+  { id: 'settings', name: 'Pengaturan', icon: '⚙️' }
 ]
 
 function checkOnboarding() {
