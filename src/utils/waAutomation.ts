@@ -4,52 +4,59 @@ import { formatTimestamp } from './helpers'
 export async function openPhoneChat(phone: string): Promise<void> {
   const cleanPhone = phone.replace(/[^0-9]/g, '')
 
-  // 1. Dispatch click event on anchor element to trigger WhatsApp Web SPA route
-  const link = document.createElement('a')
-  link.href = `https://web.whatsapp.com/send?phone=${cleanPhone}`
-  link.setAttribute('target', '_self')
-  document.body.appendChild(link)
+  // 1. Locate WhatsApp Web search input box in the left sidebar
+  let searchInput = (
+    document.querySelector('#side div[contenteditable="true"]') ||
+    document.querySelector('[data-testid="chat-list-search"]') ||
+    document.querySelector('#side input[type="text"]')
+  ) as HTMLElement | null
 
-  const clickEvent = new MouseEvent('click', {
-    bubbles: true,
-    cancelable: true,
-    view: window
-  })
-  link.dispatchEvent(clickEvent)
-  link.remove()
+  // If search box is not directly visible, click "New Chat" icon button in the header
+  if (!searchInput) {
+    const newChatBtn = (
+      document.querySelector('span[data-icon="chat"]')?.closest('button') ||
+      document.querySelector('span[data-icon="new-chat-outline"]')?.closest('button') ||
+      document.querySelector('button[aria-label="New chat"]') ||
+      document.querySelector('button[aria-label="Chat baru"]')
+    ) as HTMLElement | null
 
-  // 2. Trigger SPA pushState & popstate event without browser tab reload
-  if (!window.location.href.includes(cleanPhone)) {
-    window.history.pushState({}, '', `/send?phone=${cleanPhone}`)
-    window.dispatchEvent(new Event('popstate'))
+    if (newChatBtn) {
+      newChatBtn.click()
+      await new Promise(r => setTimeout(r, 400))
+      searchInput = (
+        document.querySelector('div[contenteditable="true"][data-tab="3"]') ||
+        document.querySelector('#side div[contenteditable="true"]') ||
+        document.querySelector('div[contenteditable="true"]')
+      ) as HTMLElement | null
+    }
   }
 
-  // 3. Fallback: Search number in WhatsApp Web search bar if composer is not open
-  setTimeout(async () => {
-    const composer = document.querySelector('footer div[contenteditable="true"]')
-    if (!composer) {
-      const searchBox = (
-        document.querySelector('#side div[contenteditable="true"]') ||
-        document.querySelector('[data-testid="chat-list-search"]') ||
-        document.querySelector('#side input')
-      ) as HTMLElement | null
+  if (searchInput) {
+    searchInput.focus()
 
-      if (searchBox) {
-        searchBox.focus()
-        document.execCommand('selectAll', false)
-        document.execCommand('delete', false)
-        document.execCommand('insertText', false, cleanPhone)
-        searchBox.dispatchEvent(new InputEvent('input', { bubbles: true }))
+    // Clear previous search query
+    document.execCommand('selectAll', false)
+    document.execCommand('delete', false)
 
-        await new Promise(r => setTimeout(r, 800))
-        const firstResult = (
-          document.querySelector('#pane-side [role="listitem"]') ||
-          document.querySelector('[data-testid="chat-list-item"]')
-        ) as HTMLElement | null
-        if (firstResult) firstResult.click()
-      }
+    // Type the target phone number directly into search input
+    document.execCommand('insertText', false, cleanPhone)
+    searchInput.dispatchEvent(new InputEvent('input', { bubbles: true }))
+
+    // Wait for WhatsApp Web search results to populate
+    await new Promise(r => setTimeout(r, 900))
+
+    // Click the top search result item in the search list
+    const firstResult = (
+      document.querySelector('#pane-side [role="listitem"]') ||
+      document.querySelector('#side [data-testid="chat-list-item"]') ||
+      document.querySelector('[data-testid="cell-frame-container"]')
+    ) as HTMLElement | null
+
+    if (firstResult) {
+      firstResult.click()
+      await new Promise(r => setTimeout(r, 400))
     }
-  }, 400)
+  }
 }
 
 export interface ChatReadyResult {
