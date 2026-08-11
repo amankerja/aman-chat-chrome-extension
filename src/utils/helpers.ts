@@ -123,3 +123,19 @@ export async function translateText(text: string, targetLang: string = 'id'): Pr
     throw new Error('Gagal menerjemahkan.')
   }
 }
+
+export function parseSpintax(text: string): string {
+  if (!text) return ''
+  const regex = /\{([^{}]+)\}/g
+  let result = text
+  let match: RegExpExecArray | null
+
+  while ((match = regex.exec(result)) !== null) {
+    const options = match[1].split('|')
+    const chosen = options[Math.floor(Math.random() * options.length)]
+    result = result.replace(match[0], chosen)
+    regex.lastIndex = 0
+  }
+
+  return result
+}

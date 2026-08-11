@@ -38,14 +38,15 @@
       <textarea
         v-model="broadcastState.message"
         class="ac-textarea"
-        placeholder="Tuliskan pesan utama..."
+        placeholder="Tuliskan pesan utama... (contoh: {Halo|Selamat Pagi|Sapaan} {kak|gan|sis}, promo menarik hari ini!)"
         :disabled="broadcastState.status === 'sending'"
       ></textarea>
+      <span class="ac-subtext" style="margin-top: 4px; display: block;">💡 Gunakan Spintax <code class="ac-code-font">{Kata1|Kata2|Kata3}</code> untuk merotasi variasi kata secara otomatis.</span>
 
-      <div class="ac-form-group">
+      <div class="ac-form-group" style="margin-top: 10px;">
         <label class="ac-checkbox-label">
           <input type="checkbox" v-model="broadcastState.useTwoMessages" />
-          Gunakan Pesan Alternatif (Random Rotasi)
+          Gunakan Pesan Alternatif (Random Rotasi Pesan 1 & 2)
         </label>
       </div>
 
@@ -77,6 +78,25 @@
           <option value="instant">Kirim Langsung (Instan)</option>
           <option value="character">Ketik Seperti Manusia (Karakter)</option>
         </select>
+      </div>
+
+      <!-- Batching Controls -->
+      <div class="ac-form-group" style="margin-top: 10px; border-top: 1px solid #f1f5f9; padding-top: 10px;">
+        <label class="ac-checkbox-label">
+          <input type="checkbox" v-model="broadcastState.useBatching" />
+          ☕ Pengiriman Bertahap (Batching Anti-Blokir)
+        </label>
+      </div>
+
+      <div v-if="broadcastState.useBatching" class="ac-grid-2" style="margin-top: 8px;">
+        <div class="ac-form-group">
+          <label class="ac-label">Ukuran Batch (Pesan)</label>
+          <input type="number" v-model.number="broadcastState.batchSize" min="1" max="100" class="ac-input" placeholder="10" />
+        </div>
+        <div class="ac-form-group">
+          <label class="ac-label">Istirahat Batch (Menit)</label>
+          <input type="number" v-model.number="broadcastState.batchDelayMinutes" min="1" max="120" class="ac-input" placeholder="2" />
+        </div>
       </div>
     </div>
 
@@ -264,6 +284,12 @@ async function startBroadcast() {
       }
 
       saveCurrentState()
+    },
+    {
+      useBatching: broadcastState.value.useBatching || false,
+      batchSize: broadcastState.value.batchSize || 10,
+      batchDelayMinutes: broadcastState.value.batchDelayMinutes || 2,
+      enableSpintax: broadcastState.value.enableSpintax ?? true
     }
   )
 }

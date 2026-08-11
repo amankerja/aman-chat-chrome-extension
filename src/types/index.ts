@@ -52,6 +52,10 @@ export interface BroadcastState {
   attachment?: File
   numberStatuses?: NumberStatus[]
   typingMode: 'character' | 'instant'
+  useBatching?: boolean
+  batchSize?: number
+  batchDelayMinutes?: number
+  enableSpintax?: boolean
 }
 
 export interface NumberStatus {

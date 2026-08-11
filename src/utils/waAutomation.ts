@@ -7,7 +7,7 @@ import {
   getAnalytics,
   isExtensionValid
 } from './storage'
-import { formatTimestamp, debounce } from './helpers'
+import { formatTimestamp, debounce, parseSpintax } from './helpers'
 import type { AutoReplyRule, AutoReplySettings } from '../types'
 
 const MAX_TRACKED_IDS = 300
@@ -387,10 +387,21 @@ export async function runRealBroadcast(
   minInterval: number,
   maxInterval: number,
   typingMode: 'instant' | 'character',
-  onProgress: (status: { index: number; total: number; log: string; done?: boolean }) => void
+  onProgress: (status: { index: number; total: number; log: string; done?: boolean }) => void,
+  options?: {
+    useBatching?: boolean
+    batchSize?: number
+    batchDelayMinutes?: number
+    enableSpintax?: boolean
+  }
 ): Promise<void> {
   isBroadcastRunning = true
   isBroadcastPaused = false
+
+  const useBatching = options?.useBatching ?? false
+  const batchSize = options?.batchSize ?? 10
+  const batchDelayMinutes = options?.batchDelayMinutes ?? 2
+  const enableSpintax = options?.enableSpintax ?? true
 
   onProgress({
     index: 0,
@@ -417,7 +428,10 @@ export async function runRealBroadcast(
     }
 
     const targetPhone = numbers[i]
-    const currentMsg = useTwoMessages && i % 2 === 1 && message2 ? message2 : message1
+    let currentMsg = useTwoMessages && i % 2 === 1 && message2 ? message2 : message1
+    if (enableSpintax) {
+      currentMsg = parseSpintax(currentMsg)
+    }
 
     onProgress({
       index: i,
@@ -426,7 +440,19 @@ export async function runRealBroadcast(
     })
 
     await openPhoneChat(targetPhone)
-    const readyResult = await waitForChatReadyOrError(12000)
+    let readyResult = await waitForChatReadyOrError(12000)
+
+    // 1x Automatic Retry on Timeout
+    if (!readyResult.success && readyResult.reason === 'timeout') {
+      onProgress({
+        index: i,
+        total: numbers.length,
+        log: `[${formatTimestamp()}] 🔄 Timeout pada ${targetPhone}, mencoba ulang (Retry 1/1)...`
+      })
+      await new Promise(r => setTimeout(r, 1000))
+      await openPhoneChat(targetPhone)
+      readyResult = await waitForChatReadyOrError(10000)
+    }
 
     if (!readyResult.success) {
       failedCount++
@@ -457,13 +483,32 @@ export async function runRealBroadcast(
       }
     }
 
-    // Delay before next number (except last)
-    if (i < numbers.length - 1) {
+    // Check Batching Pause
+    if (useBatching && (i + 1) % batchSize === 0 && i < numbers.length - 1) {
+      onProgress({
+        index: i + 1,
+        total: numbers.length,
+        log: `[${formatTimestamp()}] ☕ Batch ${Math.floor((i + 1) / batchSize)} selesai (${i + 1} pesan). Istirahat ${batchDelayMinutes} menit...`
+      })
+
+      const totalBatchWaitMs = batchDelayMinutes * 60 * 1000
+      const startTime = Date.now()
+
+      while (Date.now() - startTime < totalBatchWaitMs) {
+        if (!isBroadcastRunning) return
+        while (isBroadcastPaused) {
+          await new Promise(r => setTimeout(r, 1000))
+          if (!isBroadcastRunning) return
+        }
+        await new Promise(r => setTimeout(r, 1000))
+      }
+    } else if (i < numbers.length - 1) {
+      // Normal Delay before next number
       const delaySec = Math.floor(Math.random() * (maxInterval - minInterval + 1)) + minInterval
       onProgress({
         index: i + 1,
         total: numbers.length,
-        log: `[${formatTimestamp()}] Menunggu jeda ${delaySec} detik...`
+        log: `[${formatTimestamp()}] Menunggu jeda acak ${delaySec} detik...`
       })
       await new Promise(r => setTimeout(r, delaySec * 1000))
     }
