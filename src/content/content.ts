@@ -55,36 +55,115 @@ function createToggleButton(): void {
   document.body.appendChild(btn)
 }
 
+function applyPrivacyStyles(privacy: Record<string, boolean> | undefined): void {
+  let styleEl = document.getElementById('ac-privacy-styles') as HTMLStyleElement | null
+  if (!styleEl) {
+    styleEl = document.createElement('style')
+    styleEl.id = 'ac-privacy-styles'
+    document.head.appendChild(styleEl)
+  }
+
+  if (!privacy) {
+    styleEl.textContent = ''
+    return
+  }
+
+  let css = ''
+
+  if (privacy.blurChats) {
+    css += `
+      #pane-side [role="listitem"],
+      [data-testid="chat-list-item"] {
+        filter: blur(6px) !important;
+        transition: filter 0.2s ease !important;
+      }
+      #pane-side [role="listitem"]:hover,
+      [data-testid="chat-list-item"]:hover {
+        filter: blur(0) !important;
+      }
+    `
+  }
+
+  if (privacy.blurPreviews) {
+    css += `
+      #pane-side [role="listitem"] span[title],
+      #pane-side [data-testid="chat-list-item"] span,
+      #pane-side [data-testid="last-msg-status"] {
+        filter: blur(8px) !important;
+        transition: filter 0.2s ease !important;
+      }
+      #pane-side [role="listitem"]:hover span[title],
+      #pane-side [data-testid="chat-list-item"]:hover span {
+        filter: blur(0) !important;
+      }
+    `
+  }
+
+  if (privacy.blurAvatars) {
+    css += `
+      #pane-side img,
+      header img,
+      [data-testid="default-user"],
+      [data-testid="default-group"],
+      img[src*="pp"],
+      img[src*="user"],
+      img[src*="dyn"] {
+        filter: blur(8px) !important;
+        transition: filter 0.2s ease !important;
+      }
+      #pane-side img:hover,
+      header img:hover {
+        filter: blur(0) !important;
+      }
+    `
+  }
+
+  if (privacy.blurMessages) {
+    css += `
+      div[class*="message-in"] .copyable-text,
+      div[class*="message-out"] .copyable-text,
+      [data-id] .selectable-text,
+      .message-in span.selectable-text,
+      .message-out span.selectable-text {
+        filter: blur(8px) !important;
+        transition: filter 0.2s ease !important;
+      }
+      div[class*="message-in"]:hover .copyable-text,
+      div[class*="message-out"]:hover .copyable-text,
+      [data-id]:hover .selectable-text {
+        filter: blur(0) !important;
+      }
+    `
+  }
+
+  if (privacy.blurMedia) {
+    css += `
+      [data-testid="image-thumb"],
+      img[src*="blob:"],
+      video,
+      canvas,
+      [data-testid="media-canvas"] {
+        filter: blur(12px) !important;
+        transition: filter 0.2s ease !important;
+      }
+      [data-testid="image-thumb"]:hover,
+      video:hover {
+        filter: blur(0) !important;
+      }
+    `
+  }
+
+  styleEl.textContent = css
+}
+
 function setupPrivacyBlur(): void {
   chrome.storage.local.get(['wku_privacy'], (result: Record<string, Record<string, boolean>>) => {
-    const privacy = result.wku_privacy
-    if (!privacy) return
+    applyPrivacyStyles(result.wku_privacy)
+  })
 
-    const style = document.createElement('style')
-    let css = ''
-
-    if (privacy.blurChats) {
-      css += '[data-testid="chat-list-item"] { filter: blur(8px); transition: filter 0.3s; }'
-      css += '[data-testid="chat-list-item"]:hover { filter: blur(0); }'
-    }
-
-    if (privacy.blurAvatars) {
-      css += '[data-testid="default-group"], [data-testid="default-user"], img[src*="pp"] { filter: blur(8px); }'
-    }
-
-    if (privacy.blurMessages) {
-      css += '[class*="message-"] [dir="ltr"] { filter: blur(8px); transition: filter 0.3s; }'
-      css += '[class*="message-"]:hover [dir="ltr"] { filter: blur(0); }'
-    }
-
-    if (privacy.blurMedia) {
-      css += '[data-testid="image-thumb"], video { filter: blur(12px); }'
-    }
-
-    if (css) {
-      style.textContent = css
-      style.id = 'ac-privacy-styles'
-      document.head.appendChild(style)
+  chrome.storage.onChanged.addListener((changes: Record<string, chrome.storage.StorageChange>, areaName: string) => {
+    if (areaName === 'local' && changes.wku_privacy) {
+      applyPrivacyStyles(changes.wku_privacy.newValue as Record<string, boolean>)
     }
   })
 }
