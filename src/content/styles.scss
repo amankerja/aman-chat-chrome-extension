@@ -68,7 +68,7 @@ $status-breakdown-text: #b91c1c;
   box-shadow: 0 8px 16px rgba(16, 185, 129, 0.35);
 
   &.is-open {
-    right: 450px;
+    right: 468px;
     border-radius: 16px 0 0 16px;
     background: #ef4444; // Red for close
     box-shadow: -4px 4px 16px rgba(239, 68, 68, 0.3);
@@ -449,17 +449,23 @@ $status-breakdown-text: #b91c1c;
   gap: 10px;
 }
 
+.ac-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
 .ac-grid-4 {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
 }
 
 .ac-stat-box {
   background: #f8fafc;
   border: 1px solid $border;
   border-radius: 10px;
-  padding: 12px;
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
 
@@ -471,7 +477,7 @@ $status-breakdown-text: #b91c1c;
   }
 
   .ac-stat-value {
-    font-size: 1.25rem;
+    font-size: 1.15rem;
     font-weight: 700;
     color: $text-main;
   }

@@ -18,7 +18,7 @@
     <div class="ac-card ac-resume-banner" v-if="showResumeBanner">
       <p class="ac-label" style="margin: 0 0 6px;">⚠️ Broadcast sebelumnya terhenti (halaman ter-reload)</p>
       <p class="ac-subtext" style="margin-bottom: 10px;">
-        Progress terakhir: {{ broadcastState.currentIndex }} / {{ broadcastState.numbers.length }} nomor.
+        Progress terakhir: {{ broadcastState.currentIndex }} / {{ totalNumbers }} nomor.
         Lanjutkan dari nomor berikutnya, atau anggap selesai.
       </p>
       <div class="ac-grid-2">
@@ -146,14 +146,14 @@
         <div class="ac-progress-bar-fill" :style="{ width: progressPercentage + '%' }"></div>
       </div>
 
-      <div class="ac-grid-4" style="margin-top: 6px;">
+      <div class="ac-grid-3" style="margin-top: 8px;">
         <div class="ac-stat-box">
-          <span class="ac-stat-label">Total</span>
-          <span class="ac-stat-value">{{ parsedNumbers.length }}</span>
+          <span class="ac-stat-label">Total Nomor</span>
+          <span class="ac-stat-value">{{ totalNumbers }}</span>
         </div>
         <div class="ac-stat-box">
           <span class="ac-stat-label">Proses</span>
-          <span class="ac-stat-value" style="color: #15803d;">{{ broadcastState.currentIndex }}</span>
+          <span class="ac-stat-value" style="color: #15803d;">{{ broadcastState.currentIndex }} / {{ totalNumbers }}</span>
         </div>
         <div class="ac-stat-box">
           <span class="ac-stat-label">Gagal</span>
@@ -275,9 +275,16 @@ const parsedNumbers = computed(() => {
   return unique
 })
 
+const totalNumbers = computed(() => {
+  const parsedCount = parsedNumbers.value.length
+  const stateCount = broadcastState.value.numbers?.length || 0
+  return parsedCount > 0 ? parsedCount : stateCount
+})
+
 const progressPercentage = computed(() => {
-  if (parsedNumbers.value.length === 0) return 0
-  return Math.round((broadcastState.value.currentIndex / parsedNumbers.value.length) * 100)
+  const total = totalNumbers.value
+  if (total === 0) return 0
+  return Math.min(100, Math.round((broadcastState.value.currentIndex / total) * 100))
 })
 
 async function loadSavedState() {
@@ -293,8 +300,23 @@ async function loadSavedState() {
       rawNumbers.value = saved.numbers.join('\n')
     }
 
-    if (saved.status === 'sending' && !isBroadcastActuallyRunning()) {
+    const totalCount = saved.numbers.length
+    const isInterrupted = saved.status === 'sending' &&
+      totalCount > 0 &&
+      saved.currentIndex > 0 &&
+      saved.currentIndex < totalCount &&
+      !isBroadcastActuallyRunning()
+
+    if (isInterrupted) {
       showResumeBanner.value = true
+    } else if (saved.status === 'sending' && !isBroadcastActuallyRunning()) {
+      if (saved.currentIndex >= totalCount && totalCount > 0) {
+        broadcastState.value.status = 'completed'
+      } else {
+        broadcastState.value.status = 'idle'
+        broadcastState.value.currentIndex = 0
+      }
+      await saveCurrentState()
     }
   }
 }
@@ -528,4 +550,5 @@ onUnmounted(() => {
   gap: 4px;
 }
 </style>
+
 

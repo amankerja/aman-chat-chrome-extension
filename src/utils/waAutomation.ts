@@ -516,7 +516,10 @@ export async function runRealBroadcast(
       }
 
       await openPhoneChat(targetPhone)
+      if (!isBroadcastRunning) return
       const readyResult = await waitForChatReadyOrError(12000)
+
+      if (!isBroadcastRunning) return
 
       if (!readyResult.success) {
         if (readyResult.reason === 'invalid_number') {
@@ -529,6 +532,8 @@ export async function runRealBroadcast(
       }
 
       await new Promise(r => setTimeout(r, 500))
+      if (!isBroadcastRunning) return
+
       const sent = await sendRealMessage(currentMsg, mode)
 
       if (sent) {
@@ -538,6 +543,8 @@ export async function runRealBroadcast(
         attempt++
       }
     }
+
+    if (!isBroadcastRunning) return
 
     if (delivered) {
       successCount++
@@ -630,8 +637,12 @@ export function stopRealBroadcast(): void {
 }
 
 const debouncedCheck = debounce(() => checkAndAutoReply(), 400)
+let isAutoReplyObserverInit = false
 
 export function initAutoReplyObserver(): void {
+  if (isAutoReplyObserverInit) return
+  isAutoReplyObserverInit = true
+
   const observer = new MutationObserver(() => {
     debouncedCheck()
   })
@@ -642,4 +653,5 @@ export function initAutoReplyObserver(): void {
     checkAndAutoReply()
   }, 5000)
 }
+
 

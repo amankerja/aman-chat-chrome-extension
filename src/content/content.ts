@@ -342,7 +342,12 @@ function setupPrivacyBlur(): void {
   })
 }
 
+let isMessageListenerAdded = false
+
 function setupMessageListener(): void {
+  if (isMessageListenerAdded) return
+  isMessageListenerAdded = true
+
   chrome.runtime.onMessage.addListener((
     message: { action: string; messages?: unknown[] },
     _sender: chrome.runtime.MessageSender,
@@ -373,9 +378,13 @@ function handleScheduledMessages(messages: unknown[]): void {
   console.log('[AMAN CHAT] Processing scheduled messages:', messages.length)
 }
 
+let isContentInitialized = false
+
 function init(): void {
+  if (isContentInitialized) return
   if (!window.location.href.includes('web.whatsapp.com')) return
 
+  isContentInitialized = true
   injectScript()
 
   const checkReady = setInterval(() => {
@@ -396,3 +405,4 @@ if (document.readyState === 'loading') {
 } else {
   init()
 }
+
