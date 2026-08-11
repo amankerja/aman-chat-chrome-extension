@@ -195,67 +195,83 @@ export function checkAndAutoReply(): void {
 export async function openPhoneChat(phone: string): Promise<void> {
   const cleanPhone = phone.replace(/[^0-9]/g, '')
 
-  // 1. Native WA Web Link Element Click (Interacted natively by WhatsApp Web React Router without page reload)
-  let helperLink = document.getElementById('wku-nav-link-helper') as HTMLAnchorElement | null
-  if (!helperLink) {
-    helperLink = document.createElement('a')
-    helperLink.id = 'wku-nav-link-helper'
-    helperLink.style.display = 'none'
-    document.body.appendChild(helperLink)
+  // We rely strictly on DOM manipulation for opening chats seamlessly without triggering a reload
+  // (which happens if SPA router fails using the /send?phone=... link).
+
+  // Step 1: Click the "New Chat" button
+  const newChatBtn = (
+    document.querySelector('button[aria-label="New chat"]') ||
+    document.querySelector('button[aria-label="Chat baru"]') ||
+    document.querySelector('span[data-icon="chat"]')?.closest('button') ||
+    document.querySelector('span[data-icon="new-chat-outline"]')?.closest('button')
+  ) as HTMLElement | null
+
+  if (newChatBtn) {
+    newChatBtn.click()
+  } else {
+    console.error('[AMAN CHAT] Could not find "New chat" button.')
+    return
   }
 
-  helperLink.setAttribute('href', `https://web.whatsapp.com/send?phone=${cleanPhone}`)
-  helperLink.click()
+  // Step 2: Wait for search input in the sidebar to appear and type the number
+  let attempts = 0
+  let searchInput: HTMLElement | null = null
 
-  // 2. Fallback: Search phone number in left sidebar if composer doesn't open within 1.2 seconds
-  setTimeout(async () => {
-    const composer = document.querySelector('footer div[contenteditable="true"]')
-    if (!composer) {
-      let searchInput = (
-        document.querySelector('#side div[contenteditable="true"]') ||
-        document.querySelector('[data-testid="chat-list-search"]') ||
-        document.querySelector('#side input[type="text"]')
-      ) as HTMLElement | null
+  while (attempts < 10) {
+    await new Promise(r => setTimeout(r, 200))
+    searchInput = (
+      document.querySelector('div[contenteditable="true"][data-tab="3"]') ||
+      document.querySelector('#side div[contenteditable="true"]') ||
+      document.querySelector('[data-testid="chat-list-search"]') ||
+      document.querySelector('div[contenteditable="true"]')
+    ) as HTMLElement | null
 
-      if (!searchInput) {
-        const newChatBtn = (
-          document.querySelector('span[data-icon="chat"]')?.closest('button') ||
-          document.querySelector('span[data-icon="new-chat-outline"]')?.closest('button') ||
-          document.querySelector('button[aria-label="New chat"]') ||
-          document.querySelector('button[aria-label="Chat baru"]')
-        ) as HTMLElement | null
+    if (searchInput && searchInput.offsetParent !== null) {
+      break
+    }
+    attempts++
+  }
 
-        if (newChatBtn) {
-          newChatBtn.click()
-          await new Promise(r => setTimeout(r, 400))
-          searchInput = (
-            document.querySelector('div[contenteditable="true"][data-tab="3"]') ||
-            document.querySelector('#side div[contenteditable="true"]') ||
-            document.querySelector('div[contenteditable="true"]')
-          ) as HTMLElement | null
-        }
-      }
+  if (searchInput) {
+    searchInput.focus()
+    document.execCommand('selectAll', false)
+    document.execCommand('delete', false)
+    document.execCommand('insertText', false, cleanPhone)
+    searchInput.dispatchEvent(new InputEvent('input', { bubbles: true }))
 
-      if (searchInput) {
-        searchInput.focus()
-        document.execCommand('selectAll', false)
-        document.execCommand('delete', false)
-        document.execCommand('insertText', false, cleanPhone)
-        searchInput.dispatchEvent(new InputEvent('input', { bubbles: true }))
+    // Step 3: Wait for search results and click the first valid list item
+    await new Promise(r => setTimeout(r, 800)) // delay for results to load
+    let resultClicked = false
+    attempts = 0
 
-        await new Promise(r => setTimeout(r, 800))
+    while (attempts < 10 && !resultClicked) {
+      await new Promise(r => setTimeout(r, 200))
+
+      const resultsContainer = document.querySelector('#pane-side') || document.querySelector('#side')
+
+      if (resultsContainer) {
+        // Find the first list item in the search results
         const firstResult = (
-          document.querySelector('#pane-side [role="listitem"]') ||
-          document.querySelector('#side [data-testid="chat-list-item"]') ||
-          document.querySelector('[data-testid="cell-frame-container"]')
+          resultsContainer.querySelector('[role="listitem"]') ||
+          resultsContainer.querySelector('[data-testid="chat-list-item"]') ||
+          resultsContainer.querySelector('[data-testid="cell-frame-container"]')
         ) as HTMLElement | null
 
         if (firstResult) {
           firstResult.click()
+          resultClicked = true
+          break
         }
       }
+      attempts++
     }
-  }, 1200)
+
+    if (!resultClicked) {
+      console.warn('[AMAN CHAT] No search result found or clickable for:', cleanPhone)
+    }
+  } else {
+    console.error('[AMAN CHAT] Could not find search input after clicking new chat.')
+  }
 }
 
 export interface ChatReadyResult {

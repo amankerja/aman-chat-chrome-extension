@@ -38,7 +38,10 @@ const DEFAULT_PRIVACY: PrivacySettings = {
   blurPreviews: false,
   blurAvatars: false,
   blurMessages: false,
-  blurMedia: false
+  blurMedia: false,
+  pinLockEnabled: false,
+  pinCode: '',
+  inactivityTimeout: 5
 }
 
 const DEFAULT_ANALYTICS: Analytics = {

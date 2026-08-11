@@ -53,6 +53,42 @@
           <span class="slider"></span>
         </label>
       </div>
+
+      <div class="ac-divider"></div>
+
+      <div class="ac-setting-row" style="margin-top: 8px;">
+        <div style="display: flex; flex-direction: column;">
+          <span>Kunci Layar & PIN (Inactivity Lock)</span>
+          <span class="ac-subtext" style="font-size: 0.65rem;">Blur otomatis saat tidak aktif</span>
+        </div>
+        <label class="ac-switch">
+          <input type="checkbox" v-model="privacy.pinLockEnabled" @change="handlePinToggle" />
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div v-if="privacy.pinLockEnabled" class="ac-pin-settings" style="margin-top: 10px; padding: 10px; background: #f8fafc; border-radius: 6px; border: 1px solid #e2e8f0;">
+        <div class="ac-form-group">
+          <label class="ac-label">Waktu Tidak Aktif (Menit)</label>
+          <select v-model.number="privacy.inactivityTimeout" class="ac-select" @change="savePrivacy">
+            <option value="1">1 Menit</option>
+            <option value="5">5 Menit</option>
+            <option value="10">10 Menit</option>
+            <option value="15">15 Menit</option>
+            <option value="60">1 Jam</option>
+          </select>
+        </div>
+
+        <div class="ac-form-group" style="margin-top: 8px;">
+          <label class="ac-label">Set/Ubah PIN (4 Digit)</label>
+          <div class="ac-grid-2" style="align-items: center;">
+            <input type="password" maxlength="4" v-model="newPinInput" class="ac-input" placeholder="Masukkan 4 angka" @input="newPinInput = newPinInput.replace(/[^0-9]/g, '').slice(0, 4)" />
+            <button class="ac-btn primary sm" @click="saveNewPin" :disabled="newPinInput.length !== 4">Simpan PIN</button>
+          </div>
+          <span class="ac-subtext" style="margin-top: 4px;" v-if="privacy.pinCode">✅ PIN sudah terpasang.</span>
+          <span class="ac-subtext" style="margin-top: 4px; color: #ef4444;" v-else>⚠️ PIN belum diatur. Set sekarang.</span>
+        </div>
+      </div>
     </div>
 
     <!-- License & Account Status Card -->
@@ -117,11 +153,15 @@ const privacy = ref<PrivacySettings>({
   blurPreviews: false,
   blurAvatars: false,
   blurMessages: false,
-  blurMedia: false
+  blurMedia: false,
+  pinLockEnabled: false,
+  pinCode: '',
+  inactivityTimeout: 5
 })
 
 const licenseKey = ref('')
 const isPremium = ref(false)
+const newPinInput = ref('')
 
 async function loadSettings() {
   privacy.value = await getPrivacySettings()
@@ -132,6 +172,24 @@ async function loadSettings() {
 
 async function savePrivacy() {
   await setPrivacySettings(privacy.value)
+}
+
+function handlePinToggle() {
+  if (privacy.value.pinLockEnabled && !privacy.value.pinCode) {
+    alert('Harap buat PIN terlebih dahulu.')
+    const pinInput = document.querySelector('input[type="password"]') as HTMLInputElement
+    if (pinInput) pinInput.focus()
+  }
+  savePrivacy()
+}
+
+async function saveNewPin() {
+  if (newPinInput.value.length === 4) {
+    privacy.value.pinCode = newPinInput.value
+    await savePrivacy()
+    alert('PIN berhasil disimpan!')
+    newPinInput.value = ''
+  }
 }
 
 async function verifyLicense() {
@@ -208,6 +266,11 @@ onMounted(() => {
   align-items: center;
   font-size: 0.78rem;
   padding: 4px 0;
+}
+.ac-divider {
+  height: 1px;
+  background: #e2e8f0;
+  margin: 10px 0;
 }
 .ac-subtext {
   font-size: 0.72rem;

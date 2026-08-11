@@ -54,32 +54,34 @@ $status-breakdown-text: #b91c1c;
   z-index: 100000;
   background: $primary;
   border: none;
-  border-radius: 50%;
+  border-radius: 16px;
   justify-content: center;
   align-items: center;
-  width: 48px;
-  height: 48px;
-  transition: right 250ms cubic-bezier(0.16, 1, 0.3, 1), background 0.2s ease, transform 0.2s ease, border-radius 0.2s ease;
+  width: 52px;
+  height: 52px;
+  transition: right 250ms cubic-bezier(0.4, 0, 0.2, 1), background 0.25s ease, transform 0.25s ease, border-radius 0.2s ease, box-shadow 0.2s ease;
   display: flex;
   position: fixed;
   top: 50%;
   right: 16px;
   transform: translateY(-50%);
-  box-shadow: -2px 4px 14px rgba(15, 23, 42, 0.16);
+  box-shadow: 0 8px 16px rgba(16, 185, 129, 0.35);
 
   &.is-open {
-    right: 440px;
-    border-radius: 12px 0 0 12px;
-    background: #128C7E;
+    right: 450px;
+    border-radius: 16px 0 0 16px;
+    background: #ef4444; // Red for close
+    box-shadow: -4px 4px 16px rgba(239, 68, 68, 0.3);
 
     &:hover {
-      background: #0f766e;
+      background: #dc2626;
     }
   }
 
   &:hover {
     background: $primary-hover;
-    transform: translateY(-50%) scale(1.05);
+    transform: translateY(-50%) translateX(-2px) scale(1.05);
+    box-shadow: 0 10px 20px rgba(16, 185, 129, 0.45);
   }
 
   svg {
@@ -92,21 +94,23 @@ $status-breakdown-text: #b91c1c;
   z-index: 99998;
   will-change: transform, right;
   background: $bg-body;
-  border-left: 1px solid #E8E8E8;
+  border-left: 1px solid rgba(255, 255, 255, 0.6); // Soft glass edge
   flex-direction: column;
   width: 440px !important;
-  height: 100vh !important;
-  transition: right 250ms cubic-bezier(0.16, 1, 0.3, 1);
+  height: calc(100vh - 32px) !important;
+  transition: right 300ms cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   position: fixed;
-  top: 0 !important;
+  top: 16px !important;
   right: -460px !important;
-  bottom: 0 !important;
+  bottom: auto !important;
+  border-radius: 20px 0 0 20px;
   overflow: hidden;
-  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.06);
+  box-shadow: -10px 0 40px rgba(15, 23, 42, 0.08);
 
   &.is-open {
-    right: 0 !important;
+    right: 16px !important;
+    border-radius: 20px;
   }
 }
 
@@ -204,27 +208,30 @@ $status-breakdown-text: #b91c1c;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 10px 4px;
-  background: #F9FAFB;
-  border: 1px solid #F3F4F6;
-  border-radius: 12px;
+  gap: 6px;
+  padding: 12px 4px;
+  background: #ffffff;
+  border: 1px solid transparent;
+  border-radius: 14px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.02);
 
   &:hover {
-    background: #F3F4F6;
-    transform: translateY(-1px);
+    background: #f8fafc;
+    border-color: #e2e8f0;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.04);
   }
 
   &.active {
-    background: #E6F4EA;
+    background: #ecfdf5; // Soft green tint
     border-color: $primary;
-    color: #128C7E;
-    box-shadow: 0 2px 8px rgba(37, 211, 102, 0.15);
+    color: $primary;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
 
     .ac-nav-label {
-      color: #128C7E;
+      color: $primary;
       font-weight: 700;
     }
   }
@@ -382,24 +389,24 @@ $status-breakdown-text: #b91c1c;
 
 .ac-btn-gradient-green {
   width: 100%;
-  padding: 12px;
-  border-radius: 12px;
+  padding: 14px;
+  border-radius: 14px;
   border: none;
-  background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
+  background: linear-gradient(135deg, $primary 0%, #047857 100%);
   color: #ffffff;
-  font-size: 0.88rem;
+  font-size: 0.92rem;
   font-weight: 700;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  box-shadow: 0 4px 12px rgba(37, 211, 102, 0.25);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.3);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease;
 
   &:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(37, 211, 102, 0.35);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(16, 185, 129, 0.4);
   }
 }
 
@@ -423,11 +430,17 @@ $status-breakdown-text: #b91c1c;
 .ac-card {
   background: $bg-card;
   border: 1px solid $border;
-  border-radius: 12px;
-  padding: 16px;
+  border-radius: 16px;
+  padding: 18px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.02);
+  transition: box-shadow 0.2s ease;
+
+  &:hover {
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.04);
+  }
 }
 
 .ac-grid-2 {
@@ -478,18 +491,20 @@ $status-breakdown-text: #b91c1c;
 
 .ac-input, .ac-select {
   width: 100%;
-  padding: 8px 12px;
+  padding: 10px 14px;
   border: 1px solid $border;
-  border-radius: 8px;
+  border-radius: 10px;
   font-size: 0.82rem;
   font-family: inherit;
-  transition: border-color 0.15s ease;
-  background: #ffffff;
+  transition: all 0.2s ease;
+  background: #f8fafc;
   color: $text-main;
 
   &:focus {
     outline: none;
     border-color: $primary;
+    background: #ffffff;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
   }
 
   &::placeholder {
@@ -547,12 +562,12 @@ $status-breakdown-text: #b91c1c;
 }
 
 .ac-btn {
-  padding: 8px 14px;
-  border-radius: 8px;
-  font-size: 0.8rem;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-size: 0.82rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   border: 1px solid transparent;
   display: inline-flex;
   align-items: center;
@@ -567,6 +582,8 @@ $status-breakdown-text: #b91c1c;
     &:hover {
       background: $primary-hover;
       border-color: $primary-hover;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 10px rgba(16, 185, 129, 0.2);
     }
   }
 
@@ -574,30 +591,35 @@ $status-breakdown-text: #b91c1c;
     background: #ffffff;
     color: $text-main;
     border-color: $border;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 
     &:hover {
-      background: #f1f5f9;
+      background: #f8fafc;
+      border-color: #cbd5e1;
     }
   }
 
   &.danger {
-    background: $status-breakdown-bg;
-    color: $status-breakdown-text;
-    border-color: #fca5a5;
+    background: #fef2f2;
+    color: #dc2626;
+    border-color: #fecaca;
 
     &:hover {
-      background: #fecaca;
+      background: #fee2e2;
     }
   }
 
   &.sm {
-    padding: 5px 10px;
+    padding: 6px 12px;
     font-size: 0.75rem;
+    border-radius: 8px;
   }
 
   &:disabled {
-    opacity: 0.5;
+    opacity: 0.6;
     cursor: not-allowed;
+    transform: none !important;
+    box-shadow: none !important;
   }
 }
 
@@ -742,6 +764,72 @@ kbd {
   font-weight: 600;
   color: $text-main;
   font-family: ui-monospace, SFMono-Regular, monospace;
+}
+
+#ac-lock-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  z-index: 999999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ac-lock-content {
+  background: #ffffff;
+  padding: 30px;
+  border-radius: 20px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.ac-lock-icon {
+  font-size: 3rem;
+  margin-bottom: 10px;
+}
+
+.ac-lock-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.ac-lock-desc {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin-bottom: 10px;
+}
+
+#ac-pin-input {
+  width: 100%;
+  padding: 12px;
+  font-size: 1.5rem;
+  letter-spacing: 12px;
+  text-align: center;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  outline: none;
+  transition: border-color 0.2s;
+
+  &:focus {
+    border-color: #2563eb;
+  }
+}
+
+.ac-lock-error {
+  color: #ef4444;
+  font-size: 0.8rem;
+  font-weight: 600;
 }
 
 .ac-modal-overlay {
