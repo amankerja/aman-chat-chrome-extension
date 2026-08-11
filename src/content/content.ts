@@ -1,5 +1,6 @@
 import { createApp, type App } from 'vue'
 import Sidebar from '../components/Sidebar.vue'
+import { initAutoReplyObserver } from '../utils/waAutomation'
 import '../content/styles.scss'
 
 let sidebarContainer: HTMLElement | null = null
@@ -210,6 +211,7 @@ function init(): void {
       createToggleButton()
       setupPrivacyBlur()
       setupMessageListener()
+      initAutoReplyObserver()
       console.log('[AMAN CHAT] Content script initialized')
     }
   }, 500)

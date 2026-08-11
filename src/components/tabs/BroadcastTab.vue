@@ -7,10 +7,10 @@
           <path d="M12 2A10 10 0 0 0 2 12h10z"/>
           <path d="M12 12 2.1 14.9A10 10 0 0 0 12 22z"/>
         </svg>
-        Broadcast Massal
+        Broadcast Massal (Real WA)
       </h2>
       <span class="ac-badge hauling" v-if="broadcastState.status !== 'idle'">
-        Status: {{ broadcastState.status }}
+        Status: {{ broadcastState.status.toUpperCase() }}
       </span>
     </div>
 
@@ -82,7 +82,7 @@
 
     <!-- Progress & Controls Card -->
     <div class="ac-card">
-      <h3 class="ac-label">Kontrol & Progress</h3>
+      <h3 class="ac-label">Kontrol & Progress Real</h3>
       
       <div class="ac-progress-bar-bg">
         <div class="ac-progress-bar-fill" :style="{ width: progressPercentage + '%' }"></div>
@@ -94,7 +94,7 @@
           <span class="ac-stat-value">{{ parsedNumbers.length }}</span>
         </div>
         <div class="ac-stat-box">
-          <span class="ac-stat-label">Terkirim</span>
+          <span class="ac-stat-label">Proses</span>
           <span class="ac-stat-value" style="color: #15803d;">{{ broadcastState.currentIndex }}</span>
         </div>
       </div>
@@ -106,7 +106,7 @@
           :disabled="parsedNumbers.length === 0 || !broadcastState.message"
           @click="startBroadcast"
         >
-          ▶ Mulai Broadcast
+          ▶ Mulai Broadcast (Real)
         </button>
         <button
           v-else-if="broadcastState.status === 'sending'"
@@ -115,6 +115,14 @@
         >
           ⏸️ Pause
         </button>
+        <button
+          v-else-if="broadcastState.status === 'paused'"
+          class="ac-btn primary"
+          @click="resumeBroadcast"
+        >
+          ▶ Lanjutkan
+        </button>
+
         <button
           v-if="broadcastState.status !== 'idle'"
           class="ac-btn danger"
@@ -125,10 +133,10 @@
       </div>
     </div>
 
-    <!-- Execution Logs -->
+    <!-- Real Execution Logs -->
     <div class="ac-card" v-if="broadcastState.logs.length > 0">
       <div class="ac-section-header">
-        <h3 class="ac-label">Log Riwayat Broadcast</h3>
+        <h3 class="ac-label">Log Riwayat Real Broadcast</h3>
         <button class="ac-btn secondary sm" @click="downloadLogs">Export Log</button>
       </div>
       <div class="ac-log-box ac-code-font">
@@ -143,8 +151,14 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import type { BroadcastState } from '../../types'
-import { getBroadcastState, setBroadcastState, setAnalytics, getAnalytics } from '../../utils/storage'
-import { downloadCSV, formatTimestamp } from '../../utils/helpers'
+import { getBroadcastState, setBroadcastState } from '../../utils/storage'
+import { downloadCSV } from '../../utils/helpers'
+import {
+  runRealBroadcast,
+  pauseRealBroadcast,
+  resumeRealBroadcast,
+  stopRealBroadcast
+} from '../../utils/waAutomation'
 
 const rawNumbers = ref('')
 
@@ -210,69 +224,57 @@ function handleCSVImport(event: Event) {
   reader.readAsText(file)
 }
 
-let timerId: ReturnType<typeof setTimeout> | null = null
-
 async function startBroadcast() {
   if (parsedNumbers.value.length === 0 || !broadcastState.value.message) return
 
   broadcastState.value.status = 'sending'
-  broadcastState.value.logs.push(`[${formatTimestamp()}] --- Memulai Kampanye Broadcast (${parsedNumbers.value.length} penerima) ---`)
+  broadcastState.value.currentIndex = 0
+  broadcastState.value.logs = []
   await saveCurrentState()
 
-  processNextNumber()
-}
+  runRealBroadcast(
+    parsedNumbers.value,
+    broadcastState.value.message,
+    broadcastState.value.message2,
+    broadcastState.value.useTwoMessages,
+    broadcastState.value.minInterval || 3,
+    broadcastState.value.maxInterval || 7,
+    broadcastState.value.typingMode || 'instant',
+    (progress) => {
+      broadcastState.value.currentIndex = progress.index
+      broadcastState.value.logs.push(progress.log)
 
-async function processNextNumber() {
-  if (broadcastState.value.status !== 'sending') return
+      if (progress.done) {
+        broadcastState.value.status = 'completed'
+      }
 
-  if (broadcastState.value.currentIndex >= parsedNumbers.value.length) {
-    broadcastState.value.status = 'completed'
-    broadcastState.value.logs.push(`[${formatTimestamp()}] Kampanye Broadcast Selesai!`)
-    await saveCurrentState()
-    
-    // Update global analytics
-    const currentAnalytics = await getAnalytics()
-    currentAnalytics.totalSent += broadcastState.value.currentIndex
-    currentAnalytics.totalSuccess += broadcastState.value.currentIndex
-    currentAnalytics.campaignsCount += 1
-    await setAnalytics(currentAnalytics)
-    return
-  }
-
-  const targetNumber = parsedNumbers.value[broadcastState.value.currentIndex]
-  const currentMsg = broadcastState.value.useTwoMessages && broadcastState.value.currentIndex % 2 === 1
-    ? (broadcastState.value.message2 || broadcastState.value.message)
-    : broadcastState.value.message
-
-  broadcastState.value.logs.push(`[${formatTimestamp()}] Kirim ke ${targetNumber}... Sukses!`)
-  broadcastState.value.currentIndex += 1
-  await saveCurrentState()
-
-  const min = broadcastState.value.minInterval || 3
-  const max = broadcastState.value.maxInterval || 7
-  const randomDelay = (Math.floor(Math.random() * (max - min + 1)) + min) * 1000
-
-  timerId = setTimeout(processNextNumber, randomDelay)
+      saveCurrentState()
+    }
+  )
 }
 
 function pauseBroadcast() {
   broadcastState.value.status = 'paused'
-  if (timerId) clearTimeout(timerId)
-  broadcastState.value.logs.push(`[${formatTimestamp()}] Broadcast Di-pause.`)
+  pauseRealBroadcast()
+  saveCurrentState()
+}
+
+function resumeBroadcast() {
+  broadcastState.value.status = 'sending'
+  resumeRealBroadcast()
   saveCurrentState()
 }
 
 function stopBroadcast() {
   broadcastState.value.status = 'idle'
   broadcastState.value.currentIndex = 0
-  if (timerId) clearTimeout(timerId)
-  broadcastState.value.logs.push(`[${formatTimestamp()}] Broadcast Di-hentikan.`)
+  stopRealBroadcast()
   saveCurrentState()
 }
 
 function downloadLogs() {
   const content = broadcastState.value.logs.join('\n')
-  downloadCSV(content, `broadcast-log-${Date.now()}.txt`)
+  downloadCSV(content, `real-broadcast-log-${Date.now()}.txt`)
 }
 
 onMounted(() => {
@@ -311,7 +313,7 @@ onMounted(() => {
   transition: width 0.3s ease;
 }
 .ac-log-box {
-  max-height: 120px;
+  max-height: 140px;
   overflow-y: auto;
   background: #0f172a;
   color: #38bdf8;
