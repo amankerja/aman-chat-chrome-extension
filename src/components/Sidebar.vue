@@ -1,5 +1,5 @@
 <template>
-  <div class="ac-sidebar" :class="{ 'is-open': sidebarState.isOpen }">
+  <div class="ac-sidebar" :class="{ 'is-open': sidebarState.isOpen }" :style="{ zoom: zoomScale }">
     <!-- Header Area (72px) -->
     <header class="ac-sidebar-header">
       <div class="ac-sidebar-brand">
@@ -21,6 +21,13 @@
       </div>
 
       <div style="display: flex; gap: 6px; align-items: center;">
+        <!-- Zoom In / Zoom Out Controls -->
+        <div class="ac-zoom-controls" title="Pengaturan Skala Tampilan (Zoom)">
+          <button class="ac-zoom-btn" @click="zoomOut" title="Perkecil Tampilan (Zoom Out)">–</button>
+          <span class="ac-zoom-badge" @click="resetZoom" title="Klik untuk reset ke 100%">{{ Math.round(zoomScale * 100) }}%</span>
+          <button class="ac-zoom-btn" @click="zoomIn" title="Perbesar Tampilan (Zoom In)">+</button>
+        </div>
+
         <button class="ac-btn secondary sm" style="padding: 4px 8px; font-size: 0.72rem;" @click="showOnboarding = true" title="Panduan & Onboarding Tour">
           🚀 Tour
         </button>
@@ -136,7 +143,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { sidebarState, closeSidebar, toggleSidebarState } from '../utils/sidebarState'
-import { getPrivacySettings, setPrivacySettings } from '../utils/storage'
+import { getPrivacySettings, setPrivacySettings, getZoomScale, setZoomScale } from '../utils/storage'
 import DashboardTab from './tabs/DashboardTab.vue'
 import TemplatesTab from './tabs/TemplatesTab.vue'
 import AutoReplyTab from './tabs/AutoReplyTab.vue'
@@ -147,6 +154,7 @@ import SettingsTab from './tabs/SettingsTab.vue'
 const activeTab = ref('dashboard')
 const showOnboarding = ref(false)
 const onboardingStep = ref(1)
+const zoomScale = ref(1.0)
 
 const tabs = [
   { id: 'dashboard', name: 'Dashboard', icon: '📊' },
@@ -158,6 +166,29 @@ const tabs = [
   { id: 'contacts', name: 'Kontak', icon: '📱' },
   { id: 'settings', name: 'Pengaturan', icon: '⚙️' }
 ]
+
+async function loadZoomScale() {
+  zoomScale.value = await getZoomScale()
+}
+
+async function zoomIn() {
+  if (zoomScale.value < 1.40) {
+    zoomScale.value = Math.min(1.40, parseFloat((zoomScale.value + 0.05).toFixed(2)))
+    await setZoomScale(zoomScale.value)
+  }
+}
+
+async function zoomOut() {
+  if (zoomScale.value > 0.65) {
+    zoomScale.value = Math.max(0.65, parseFloat((zoomScale.value - 0.05).toFixed(2)))
+    await setZoomScale(zoomScale.value)
+  }
+}
+
+async function resetZoom() {
+  zoomScale.value = 1.0
+  await setZoomScale(1.0)
+}
 
 function checkOnboarding() {
   if (typeof chrome !== 'undefined' && chrome.storage?.local) {
@@ -230,12 +261,26 @@ function handleGlobalKeydown(e: KeyboardEvent) {
         e.preventDefault()
         togglePrivacyShortcut()
         break
+      case '=':
+      case '+':
+        e.preventDefault()
+        zoomIn()
+        break
+      case '-':
+        e.preventDefault()
+        zoomOut()
+        break
+      case '0':
+        e.preventDefault()
+        resetZoom()
+        break
     }
   }
 }
 
 onMounted(() => {
   console.log('[AMAN CHAT] Sidebar component mounted')
+  loadZoomScale()
   checkOnboarding()
   window.addEventListener('keydown', handleGlobalKeydown)
 })

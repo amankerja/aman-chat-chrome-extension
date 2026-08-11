@@ -219,6 +219,14 @@ export function setIsPremium(isPremium: boolean): Promise<void> {
   return setStorage<boolean>(STORAGE_KEYS.IS_PREMIUM, isPremium)
 }
 
+export function getZoomScale(): Promise<number> {
+  return getStorage<number>('wku_zoom_scale', 1.0)
+}
+
+export function setZoomScale(scale: number): Promise<void> {
+  return setStorage<number>('wku_zoom_scale', scale)
+}
+
 export async function initializeStorage(): Promise<void> {
   const privacy = await getPrivacySettings()
   await setPrivacySettings(privacy)
