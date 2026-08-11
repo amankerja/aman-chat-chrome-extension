@@ -212,60 +212,84 @@ export function checkAndAutoReply(): void {
 
 export async function openPhoneChat(phone: string): Promise<void> {
   const cleanPhone = phone.replace(/[^0-9]/g, '')
+  if (!cleanPhone) return
 
-  // 1. Native WA Web Link Element Click
-  let helperLink = document.getElementById('wku-nav-link-helper') as HTMLAnchorElement | null
-  if (!helperLink) {
-    helperLink = document.createElement('a')
-    helperLink.id = 'wku-nav-link-helper'
-    helperLink.style.display = 'none'
-    document.body.appendChild(helperLink)
+  // 0. Check if the chat for this phone is already open in composer
+  const activeHeader = document.querySelector('header [title]') || document.querySelector('#main header')
+  if (activeHeader && activeHeader.textContent?.replace(/[^0-9]/g, '').includes(cleanPhone)) {
+    console.log(`[AMAN CHAT] Chat for ${cleanPhone} is already open.`)
+    return
   }
-  helperLink.setAttribute('href', `https://web.whatsapp.com/send?phone=${cleanPhone}`)
-  helperLink.click()
 
-  // 2. Fallback via DOM manipulation if composer doesn't open in 1.2 seconds
-  setTimeout(async () => {
-    const composer = document.querySelector('footer div[contenteditable="true"]')
-    if (!composer) {
-      const newChatBtn = (
-        document.querySelector('button[aria-label="New chat"]') ||
-        document.querySelector('button[aria-label="Chat baru"]') ||
-        document.querySelector('span[data-icon="chat"]')?.closest('button') ||
-        document.querySelector('span[data-icon="new-chat-outline"]')?.closest('button')
+  // Step 1: Click "New chat" or Search button to open search panel (DOM only, NO page reload)
+  const newChatBtn = (
+    document.querySelector('button[aria-label="New chat"]') ||
+    document.querySelector('button[aria-label="Chat baru"]') ||
+    document.querySelector('button[aria-label="Chat Baru"]') ||
+    document.querySelector('span[data-icon="chat"]')?.closest('button') ||
+    document.querySelector('span[data-icon="new-chat-outline"]')?.closest('button') ||
+    document.querySelector('span[data-icon="search"]')?.closest('button')
+  ) as HTMLElement | null
+
+  if (newChatBtn) {
+    newChatBtn.click()
+    await new Promise(r => setTimeout(r, 300))
+  }
+
+  // Step 2: Find search input in side panel
+  let searchInput: HTMLElement | null = null
+  for (let attempt = 0; attempt < 12; attempt++) {
+    searchInput = (
+      document.querySelector('div[contenteditable="true"][data-tab="3"]') ||
+      document.querySelector('div[contenteditable="true"][data-tab="2"]') ||
+      document.querySelector('#side div[contenteditable="true"]') ||
+      document.querySelector('[data-testid="chat-list-search"]') ||
+      document.querySelector('div[contenteditable="true"]')
+    ) as HTMLElement | null
+
+    if (searchInput && searchInput.offsetParent !== null) {
+      break
+    }
+    await new Promise(r => setTimeout(r, 150))
+  }
+
+  if (!searchInput) {
+    console.error('[AMAN CHAT] Could not find WhatsApp search input element.')
+    return
+  }
+
+  // Step 3: Type the phone number into search input seamlessly
+  searchInput.focus()
+  document.execCommand('selectAll', false)
+  document.execCommand('delete', false)
+  document.execCommand('insertText', false, cleanPhone)
+  searchInput.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true }))
+  searchInput.dispatchEvent(new Event('change', { bubbles: true }))
+
+  // Step 4: Wait for search result list item to appear and click it
+  let resultClicked = false
+  for (let attempt = 0; attempt < 15; attempt++) {
+    await new Promise(r => setTimeout(r, 150))
+    const resultsContainer = document.querySelector('#pane-side') || document.querySelector('#side')
+    if (resultsContainer) {
+      const firstResult = (
+        resultsContainer.querySelector('[role="listitem"]') ||
+        resultsContainer.querySelector('[data-testid="chat-list-item"]') ||
+        resultsContainer.querySelector('[data-testid="cell-frame-container"]') ||
+        resultsContainer.querySelector('div[role="button"][data-testid^="cell-frame"]')
       ) as HTMLElement | null
 
-      if (newChatBtn) {
-        newChatBtn.click()
-        await new Promise(r => setTimeout(r, 400))
-        let searchInput = (
-          document.querySelector('div[contenteditable="true"][data-tab="3"]') ||
-          document.querySelector('#side div[contenteditable="true"]') ||
-          document.querySelector('[data-testid="chat-list-search"]') ||
-          document.querySelector('div[contenteditable="true"]')
-        ) as HTMLElement | null
-
-        if (searchInput) {
-          searchInput.focus()
-          document.execCommand('selectAll', false)
-          document.execCommand('delete', false)
-          document.execCommand('insertText', false, cleanPhone)
-          searchInput.dispatchEvent(new InputEvent('input', { bubbles: true }))
-
-          await new Promise(r => setTimeout(r, 800))
-          const firstResult = (
-            document.querySelector('#pane-side [role="listitem"]') ||
-            document.querySelector('#side [data-testid="chat-list-item"]') ||
-            document.querySelector('[data-testid="cell-frame-container"]')
-          ) as HTMLElement | null
-
-          if (firstResult) {
-            firstResult.click()
-          }
-        }
+      if (firstResult) {
+        firstResult.click()
+        resultClicked = true
+        break
       }
     }
-  }, 1200)
+  }
+
+  if (!resultClicked) {
+    console.warn(`[AMAN CHAT] No search result clicked for number: ${cleanPhone}`)
+  }
 }
 
 export interface ChatReadyResult {
