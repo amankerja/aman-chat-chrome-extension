@@ -9,15 +9,28 @@
         </div>
         <div class="ac-brand-text">
           <span class="ac-brand-name">AMAN CHAT</span>
-          <span class="ac-brand-tagline">part of amankerja.com</span>
+          <span class="ac-brand-tagline">amankerja.com</span>
         </div>
       </div>
-      <div style="display: flex; gap: 4px; align-items: center;">
-        <button class="ac-btn secondary sm" style="padding: 3px 8px; font-size: 0.7rem;" @click="showOnboarding = true" title="Panduan & Onboarding Tour">
+
+      <nav class="ac-sidebar-nav">
+        <button
+          v-for="tab in tabs"
+          :key="tab.id"
+          class="ac-nav-tab"
+          :class="{ active: activeTab === tab.id }"
+          @click="activeTab = tab.id"
+        >
+          {{ tab.name }}
+        </button>
+      </nav>
+
+      <div style="display: flex; gap: 8px; align-items: center; flex-shrink: 0;">
+        <button class="ac-btn secondary sm" style="padding: 4px 10px; font-size: 0.75rem;" @click="showOnboarding = true" title="Panduan & Onboarding Tour">
           🚀 Tour
         </button>
-        <button class="ac-btn secondary sm" @click="closeSidebar()">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <button class="ac-btn secondary sm" @click="closeSidebar()" title="Tutup Panel (Alt+A)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"/>
             <line x1="6" y1="6" x2="18" y2="18"/>
           </svg>
@@ -25,22 +38,10 @@
       </div>
     </header>
 
-    <nav class="ac-sidebar-nav">
-      <button
-        v-for="tab in tabs"
-        :key="tab.id"
-        class="ac-nav-tab"
-        :class="{ active: activeTab === tab.id }"
-        @click="activeTab = tab.id"
-      >
-        {{ tab.name }}
-      </button>
-    </nav>
-
     <!-- Shortcut Keys Bar -->
     <div class="ac-shortcut-bar">
       <span>💡 Shortcut: </span>
-      <kbd>Alt+D</kbd> Dash <kbd>Alt+B</kbd> Broad <kbd>Alt+R</kbd> Auto <kbd>Alt+P</kbd> Blur
+      <kbd>Alt+D</kbd> Dashboard <kbd>Alt+B</kbd> Broadcast <kbd>Alt+R</kbd> Auto Reply <kbd>Alt+T</kbd> Template <kbd>Alt+C</kbd> CRM <kbd>Alt+P</kbd> Privacy Blur
     </div>
 
     <main class="ac-sidebar-content">
