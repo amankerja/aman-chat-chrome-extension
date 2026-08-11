@@ -210,6 +210,8 @@ const progressPercentage = computed(() => {
 async function loadSavedState() {
   const saved = await getBroadcastState()
   if (saved) {
+    if (!Array.isArray(saved.logs)) saved.logs = []
+    if (!Array.isArray(saved.numbers)) saved.numbers = []
     broadcastState.value = saved
     if (saved.numbers.length > 0) {
       rawNumbers.value = saved.numbers.join('\n')
@@ -217,16 +219,14 @@ async function loadSavedState() {
   }
 }
 
-// Fix: previously the broadcast state was only loaded once on mount. If the
-// user switched to another tab mid-broadcast, this component would be
-// unmounted; when they came back, a brand-new component (with a brand-new
-// state ref) was created and never heard about progress made while it was
-// gone. Listening for chrome.storage.onChanged keeps the UI live no matter
+// Fix: listening for chrome.storage.onChanged keeps the UI live no matter
 // how many times the tab is switched away and back.
 function handleStorageChange(changes: Record<string, chrome.storage.StorageChange>, areaName: string) {
   if (areaName === 'local' && changes.wku_broadcast_state) {
     const newState = changes.wku_broadcast_state.newValue as BroadcastState | undefined
     if (newState) {
+      if (!Array.isArray(newState.logs)) newState.logs = []
+      if (!Array.isArray(newState.numbers)) newState.numbers = []
       broadcastState.value = newState
     }
   }
@@ -234,6 +234,9 @@ function handleStorageChange(changes: Record<string, chrome.storage.StorageChang
 
 async function saveCurrentState() {
   broadcastState.value.numbers = parsedNumbers.value
+  if (!Array.isArray(broadcastState.value.logs)) {
+    broadcastState.value.logs = []
+  }
   await setBroadcastState(broadcastState.value)
 }
 
@@ -277,6 +280,11 @@ async function startBroadcast() {
     broadcastState.value.typingMode || 'instant',
     (progress) => {
       broadcastState.value.currentIndex = progress.index
+
+      if (!Array.isArray(broadcastState.value.logs)) {
+        broadcastState.value.logs = []
+      }
+
       broadcastState.value.logs.push(progress.log)
 
       if (progress.done) {

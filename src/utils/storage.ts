@@ -162,11 +162,20 @@ export function setCRMContacts(contacts: CRMContact[]): Promise<void> {
   return setStorage<CRMContact[]>(STORAGE_KEYS.CRM_CONTACTS, contacts)
 }
 
-export function getBroadcastState(): Promise<BroadcastState | null> {
-  return getStorage<BroadcastState | null>(STORAGE_KEYS.BROADCAST_STATE, null)
+export async function getBroadcastState(): Promise<BroadcastState | null> {
+  const state = await getStorage<BroadcastState | null>(STORAGE_KEYS.BROADCAST_STATE, null)
+  if (state) {
+    if (!Array.isArray(state.logs)) state.logs = []
+    if (!Array.isArray(state.numbers)) state.numbers = []
+  }
+  return state
 }
 
 export function setBroadcastState(state: BroadcastState | null): Promise<void> {
+  if (state) {
+    if (!Array.isArray(state.logs)) state.logs = []
+    if (!Array.isArray(state.numbers)) state.numbers = []
+  }
   return setStorage<BroadcastState | null>(STORAGE_KEYS.BROADCAST_STATE, state)
 }
 
