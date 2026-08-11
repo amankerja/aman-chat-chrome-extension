@@ -374,6 +374,9 @@ function setupMessageListener(): void {
   })
 }
 
+// Call setupMessageListener synchronously at top level during script evaluation!
+setupMessageListener()
+
 function handleScheduledMessages(messages: unknown[]): void {
   console.log('[AMAN CHAT] Processing scheduled messages:', messages.length)
 }
@@ -392,7 +395,6 @@ function init(): void {
       clearInterval(checkReady)
       createToggleButton()
       setupPrivacyBlur()
-      setupMessageListener()
       initActivityListeners()
       initAutoReplyObserver()
       console.log('[AMAN CHAT] Content script initialized')
@@ -405,4 +407,5 @@ if (document.readyState === 'loading') {
 } else {
   init()
 }
+
 

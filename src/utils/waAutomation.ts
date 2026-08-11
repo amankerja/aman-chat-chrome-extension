@@ -210,6 +210,32 @@ export function checkAndAutoReply(): void {
   })
 }
 
+function findWaSearchInput(): HTMLElement | null {
+  const selectors = [
+    '#side div[contenteditable="true"]',
+    '#side div[role="textbox"]',
+    'div[contenteditable="true"][data-tab="3"]',
+    'div[contenteditable="true"][data-tab="2"]',
+    'div[contenteditable="true"][data-tab="1"]',
+    'div[data-testid="chat-list-search"]',
+    '#pane-side div[contenteditable="true"]',
+    'div[contenteditable="true"][title*="Search"]',
+    'div[contenteditable="true"][title*="Cari"]',
+    'p.selectable-text.copyable-text',
+    'div[contenteditable="true"]'
+  ]
+
+  for (const sel of selectors) {
+    const elements = Array.from(document.querySelectorAll(sel)) as HTMLElement[]
+    for (const el of elements) {
+      if (el && (el.offsetParent !== null || el.getClientRects().length > 0)) {
+        return el
+      }
+    }
+  }
+  return null
+}
+
 export async function openPhoneChat(phone: string): Promise<void> {
   const cleanPhone = phone.replace(/[^0-9]/g, '')
   if (!cleanPhone) return
@@ -221,36 +247,40 @@ export async function openPhoneChat(phone: string): Promise<void> {
     return
   }
 
-  // Step 1: Click "New chat" or Search button to open search panel (DOM only, NO page reload)
-  const newChatBtn = (
+  // Step 1: Click "New chat" or Search button to open search panel
+  const triggerBtn = (
     document.querySelector('button[aria-label="New chat"]') ||
     document.querySelector('button[aria-label="Chat baru"]') ||
     document.querySelector('button[aria-label="Chat Baru"]') ||
+    document.querySelector('button[aria-label*="Search"]') ||
+    document.querySelector('button[aria-label*="Cari"]') ||
+    document.querySelector('[data-testid="chat-list-search"]') ||
     document.querySelector('span[data-icon="chat"]')?.closest('button') ||
     document.querySelector('span[data-icon="new-chat-outline"]')?.closest('button') ||
-    document.querySelector('span[data-icon="search"]')?.closest('button')
+    document.querySelector('span[data-icon="search"]')?.closest('button') ||
+    document.querySelector('#side header')
   ) as HTMLElement | null
 
-  if (newChatBtn) {
-    newChatBtn.click()
-    await new Promise(r => setTimeout(r, 300))
+  if (triggerBtn) {
+    triggerBtn.click()
+    await new Promise(r => setTimeout(r, 250))
   }
 
-  // Step 2: Find search input in side panel
+  // Step 2: Poll for search input
   let searchInput: HTMLElement | null = null
-  for (let attempt = 0; attempt < 12; attempt++) {
-    searchInput = (
-      document.querySelector('div[contenteditable="true"][data-tab="3"]') ||
-      document.querySelector('div[contenteditable="true"][data-tab="2"]') ||
-      document.querySelector('#side div[contenteditable="true"]') ||
-      document.querySelector('[data-testid="chat-list-search"]') ||
-      document.querySelector('div[contenteditable="true"]')
-    ) as HTMLElement | null
-
-    if (searchInput && searchInput.offsetParent !== null) {
-      break
-    }
+  for (let attempt = 0; attempt < 20; attempt++) {
+    searchInput = findWaSearchInput()
+    if (searchInput) break
     await new Promise(r => setTimeout(r, 150))
+  }
+
+  if (!searchInput) {
+    const sideSearchIcon = document.querySelector('#side [data-icon="search"]')?.closest('div') as HTMLElement | null
+    if (sideSearchIcon) {
+      sideSearchIcon.click()
+      await new Promise(r => setTimeout(r, 300))
+      searchInput = findWaSearchInput()
+    }
   }
 
   if (!searchInput) {
@@ -258,28 +288,38 @@ export async function openPhoneChat(phone: string): Promise<void> {
     return
   }
 
-  // Step 3: Type the phone number into search input seamlessly
+  // Step 3: Type phone number into search input seamlessly
   searchInput.focus()
-  document.execCommand('selectAll', false)
-  document.execCommand('delete', false)
-  document.execCommand('insertText', false, cleanPhone)
-  searchInput.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true }))
+  const selection = window.getSelection()
+  const range = document.createRange()
+  range.selectNodeContents(searchInput)
+  selection?.removeAllRanges()
+  selection?.addRange(range)
+
+  const inserted = document.execCommand('insertText', false, cleanPhone)
+  if (!inserted || !searchInput.textContent?.includes(cleanPhone)) {
+    searchInput.innerText = cleanPhone
+    searchInput.textContent = cleanPhone
+  }
+
+  searchInput.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: cleanPhone }))
   searchInput.dispatchEvent(new Event('change', { bubbles: true }))
 
   // Step 4: Wait for search result list item to appear and click it
   let resultClicked = false
-  for (let attempt = 0; attempt < 15; attempt++) {
+  for (let attempt = 0; attempt < 20; attempt++) {
     await new Promise(r => setTimeout(r, 150))
-    const resultsContainer = document.querySelector('#pane-side') || document.querySelector('#side')
+    const resultsContainer = document.querySelector('#pane-side') || document.querySelector('#side') || document.body
     if (resultsContainer) {
       const firstResult = (
         resultsContainer.querySelector('[role="listitem"]') ||
         resultsContainer.querySelector('[data-testid="chat-list-item"]') ||
         resultsContainer.querySelector('[data-testid="cell-frame-container"]') ||
-        resultsContainer.querySelector('div[role="button"][data-testid^="cell-frame"]')
+        resultsContainer.querySelector('div[role="button"][data-testid^="cell-frame"]') ||
+        resultsContainer.querySelector('div[role="button"][tabindex="0"]')
       ) as HTMLElement | null
 
-      if (firstResult) {
+      if (firstResult && firstResult.id !== 'aman-chat-sidebar') {
         firstResult.click()
         resultClicked = true
         break

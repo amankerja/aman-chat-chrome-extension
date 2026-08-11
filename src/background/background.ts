@@ -46,20 +46,22 @@ chrome.contextMenus.onClicked.addListener((info: chrome.contextMenus.OnClickData
   }
 })
 
-chrome.action.onClicked.addListener(async (tab: chrome.tabs.Tab) => {
-  if (tab.url?.includes('web.whatsapp.com')) {
-    try {
-      if (tab.id) {
-        await chrome.tabs.sendMessage(tab.id, { action: 'toggleSidebar' })
+chrome.action.onClicked.addListener((tab: chrome.tabs.Tab) => {
+  (async () => {
+    if (tab.url?.includes('web.whatsapp.com')) {
+      try {
+        if (tab.id) {
+          await chrome.tabs.sendMessage(tab.id, { action: 'toggleSidebar' })
+        }
+      } catch {
+        if (tab.id) {
+          chrome.tabs.reload(tab.id)
+        }
       }
-    } catch {
-      if (tab.id) {
-        chrome.tabs.reload(tab.id)
-      }
+    } else {
+      chrome.tabs.create({ url: 'https://web.whatsapp.com/' })
     }
-  } else {
-    chrome.tabs.create({ url: 'https://web.whatsapp.com/' })
-  }
+  })()
 })
 
 chrome.runtime.onMessage.addListener((
