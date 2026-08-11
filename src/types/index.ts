@@ -5,11 +5,27 @@ export interface Template {
   category?: string
 }
 
+export type MatchType = 'contains' | 'exact' | 'starts_with' | 'regex'
+
 export interface AutoReplyRule {
   id: string
   keywords: string
   reply: string
   active: boolean
+  matchType?: MatchType
+}
+
+export interface AutoReplySettings {
+  enabled: boolean
+  mode: 'all' | 'keywords'
+  cooldownMinutes: number
+  useWorkingHours: boolean
+  workingHoursStart: string
+  workingHoursEnd: string
+  workingDays: number[]
+  outOfHoursReply: string
+  defaultReplyEnabled: boolean
+  defaultReplyText: string
 }
 
 export interface CRMContact {

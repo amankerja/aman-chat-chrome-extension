@@ -1,6 +1,7 @@
 import type {
   Template,
   AutoReplyRule,
+  AutoReplySettings,
   CRMContact,
   PrivacySettings,
   FollowUpTask,
@@ -15,6 +16,7 @@ const STORAGE_KEYS = {
   AUTOREPLY_RULES: 'wku_autoreply_rules',
   AUTOREPLY_ENABLED: 'wku_autoreply_enabled',
   AUTOREPLY_MODE: 'wku_autoreply_mode',
+  AUTOREPLY_SETTINGS: 'wku_autoreply_settings',
   CRM_CONTACTS: 'wku_crm_contacts',
   BROADCAST_STATE: 'wku_broadcast_state',
   FOLLOWUP_TASKS: 'wku_followup_tasks',
@@ -45,6 +47,19 @@ const DEFAULT_ANALYTICS: Analytics = {
   totalFailed: 0,
   autoRepliesTriggered: 0,
   campaignsCount: 0
+}
+
+const DEFAULT_AUTOREPLY_SETTINGS: AutoReplySettings = {
+  enabled: false,
+  mode: 'keywords',
+  cooldownMinutes: 5,
+  useWorkingHours: false,
+  workingHoursStart: '08:00',
+  workingHoursEnd: '17:00',
+  workingDays: [1, 2, 3, 4, 5],
+  outOfHoursReply: 'Halo! Terima kasih telah menghubungi kami. Saat ini kami sedang di luar jam kerja (Senin - Jumat, 08:00 - 17:00). Pesan Anda akan kami balas secepatnya pada jam kerja berikutnya.',
+  defaultReplyEnabled: false,
+  defaultReplyText: 'Mohon maaf, pesan Anda belum dapat diproses secara otomatis. Tim kami akan segera merespons.'
 }
 
 export function isExtensionValid(): boolean {
@@ -129,6 +144,14 @@ export function getAutoReplyMode(): Promise<'all' | 'keywords'> {
 
 export function setAutoReplyMode(mode: 'all' | 'keywords'): Promise<void> {
   return setStorage<'all' | 'keywords'>(STORAGE_KEYS.AUTOREPLY_MODE, mode)
+}
+
+export function getAutoReplyAdvancedSettings(): Promise<AutoReplySettings> {
+  return getStorage<AutoReplySettings>(STORAGE_KEYS.AUTOREPLY_SETTINGS, DEFAULT_AUTOREPLY_SETTINGS)
+}
+
+export function setAutoReplyAdvancedSettings(settings: AutoReplySettings): Promise<void> {
+  return setStorage<AutoReplySettings>(STORAGE_KEYS.AUTOREPLY_SETTINGS, settings)
 }
 
 export function getCRMContacts(): Promise<CRMContact[]> {

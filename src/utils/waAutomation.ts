@@ -1,5 +1,196 @@
-import { getAutoReplyEnabled, getAutoReplyMode, getAutoReplyRules, setAnalytics, getAnalytics, isExtensionValid } from './storage'
+import {
+  getAutoReplyEnabled,
+  getAutoReplyMode,
+  getAutoReplyRules,
+  getAutoReplyAdvancedSettings,
+  setAnalytics,
+  getAnalytics,
+  isExtensionValid
+} from './storage'
 import { formatTimestamp, debounce } from './helpers'
+import type { AutoReplyRule, AutoReplySettings } from '../types'
+
+const MAX_TRACKED_IDS = 300
+const processedMsgIds = new Set<string>()
+let lastChatKey: string | null = null
+const contactCooldownMap = new Map<string, number>()
+
+function rememberMsgId(id: string): void {
+  processedMsgIds.add(id)
+  if (processedMsgIds.size > MAX_TRACKED_IDS) {
+    const oldest = processedMsgIds.values().next().value
+    if (oldest !== undefined) processedMsgIds.delete(oldest)
+  }
+}
+
+function getCurrentChatKey(): string | null {
+  const header = document.querySelector('header [title]') || document.querySelector('#main header')
+  const label = header?.textContent?.trim()
+  return label ? label.slice(0, 100) : null
+}
+
+function getIncomingMessageNodes(): HTMLElement[] {
+  return Array.from(
+    document.querySelectorAll('div.message-in, [class*="message-in"], div[data-id^="false_"]')
+  ) as HTMLElement[]
+}
+
+function getMsgId(node: HTMLElement): string {
+  return node.getAttribute('data-id') ||
+    node.getAttribute('data-message-id') ||
+    (node.textContent || '').slice(-50)
+}
+
+function matchesRuleKeyword(incomingText: string, rule: AutoReplyRule): boolean {
+  if (!rule.active) return false
+  const matchType = rule.matchType || 'contains'
+  const keywords = rule.keywords.split(',').map(k => k.trim().toLowerCase()).filter(Boolean)
+
+  if (keywords.length === 0) return false
+
+  return keywords.some(k => {
+    switch (matchType) {
+      case 'exact':
+        return incomingText === k
+      case 'starts_with':
+        return incomingText.startsWith(k)
+      case 'regex':
+        try {
+          return new RegExp(k, 'i').test(incomingText)
+        } catch {
+          return incomingText.includes(k)
+        }
+      case 'contains':
+      default:
+        return incomingText.includes(k)
+    }
+  })
+}
+
+function isWithinWorkingHours(settings: AutoReplySettings): boolean {
+  if (!settings.useWorkingHours) return true
+
+  const now = new Date()
+  const day = now.getDay() // 0 = Sun, 1 = Mon ... 6 = Sat
+
+  if (!settings.workingDays.includes(day)) {
+    return false
+  }
+
+  const currentMinutes = now.getHours() * 60 + now.getMinutes()
+
+  const [startH, startM] = (settings.workingHoursStart || '08:00').split(':').map(Number)
+  const startMinutes = (startH || 0) * 60 + (startM || 0)
+
+  const [endH, endM] = (settings.workingHoursEnd || '17:00').split(':').map(Number)
+  const endMinutes = (endH || 0) * 60 + (endM || 0)
+
+  return currentMinutes >= startMinutes && currentMinutes <= endMinutes
+}
+
+function isContactInCooldown(chatKey: string, cooldownMinutes: number): boolean {
+  if (cooldownMinutes <= 0) return false
+  const lastReplyTime = contactCooldownMap.get(chatKey)
+  if (!lastReplyTime) return false
+
+  const elapsedMs = Date.now() - lastReplyTime
+  const cooldownMs = cooldownMinutes * 60 * 1000
+  return elapsedMs < cooldownMs
+}
+
+function updateContactCooldown(chatKey: string): void {
+  contactCooldownMap.set(chatKey, Date.now())
+}
+
+export function checkAndAutoReply(): void {
+  if (!isExtensionValid()) return
+
+  getAutoReplyEnabled().then(async (enabled) => {
+    if (!enabled) return
+
+    const incomingNodes = getIncomingMessageNodes()
+    if (incomingNodes.length === 0) return
+
+    const chatKey = getCurrentChatKey()
+    if (!chatKey) return
+
+    if (chatKey !== lastChatKey) {
+      lastChatKey = chatKey
+      for (const node of incomingNodes) {
+        rememberMsgId(getMsgId(node))
+      }
+      return
+    }
+
+    const lastMsgNode = incomingNodes[incomingNodes.length - 1]
+    const msgId = getMsgId(lastMsgNode)
+
+    if (processedMsgIds.has(msgId)) return
+
+    // Mark as processed so we don't reply multiple times
+    rememberMsgId(msgId)
+
+    // Extract text content
+    const textEl = lastMsgNode.querySelector('.selectable-text') ||
+                   lastMsgNode.querySelector('.copyable-text') ||
+                   lastMsgNode.querySelector('span[dir="ltr"]') ||
+                   lastMsgNode.querySelector('span[dir="rtl"]')
+
+    if (!textEl || !textEl.textContent) return
+    const incomingText = textEl.textContent.trim().toLowerCase()
+
+    const settings = await getAutoReplyAdvancedSettings()
+
+    // 1. Cooldown Check
+    if (isContactInCooldown(chatKey, settings.cooldownMinutes)) {
+      console.log(`[AMAN CHAT] Auto-reply skipped for "${chatKey}" (Cooldown active)`)
+      return
+    }
+
+    let replyText = ''
+
+    // 2. Working Hours Check
+    if (settings.useWorkingHours && !isWithinWorkingHours(settings)) {
+      if (settings.outOfHoursReply) {
+        replyText = settings.outOfHoursReply
+      } else {
+        console.log(`[AMAN CHAT] Auto-reply skipped (Outside working hours)`)
+        return
+      }
+    } else {
+      // Within Working Hours -> Evaluate Rules or Mode
+      const rules = await getAutoReplyRules()
+      const mode = await getAutoReplyMode()
+
+      if (mode === 'all') {
+        replyText = rules[0]?.reply || 'Halo! Pesan Anda telah kami terima.'
+      } else {
+        for (const r of rules) {
+          if (matchesRuleKeyword(incomingText, r)) {
+            replyText = r.reply
+            break
+          }
+        }
+
+        // Default Reply Fallback
+        if (!replyText && settings.defaultReplyEnabled && settings.defaultReplyText) {
+          replyText = settings.defaultReplyText
+        }
+      }
+    }
+
+    if (replyText) {
+      console.log(`[AMAN CHAT] Smart Auto-replying to "${incomingText}" with "${replyText}"`)
+      updateContactCooldown(chatKey)
+      await new Promise(res => setTimeout(res, 800))
+      await sendRealMessage(replyText, 'instant')
+
+      const analytics = await getAnalytics()
+      analytics.autoRepliesTriggered += 1
+      await setAnalytics(analytics)
+    }
+  })
+}
 
 export async function openPhoneChat(phone: string): Promise<void> {
   const cleanPhone = phone.replace(/[^0-9]/g, '')
@@ -309,124 +500,6 @@ export function stopRealBroadcast(): void {
   isBroadcastPaused = false
 }
 
-// Auto Reply Engine
-//
-// Bug fixes vs the previous version:
-// 1. "Replies to old messages" — the old code only deduped by message id and
-//    had no concept of "seen before auto-reply was even turned on", so the
-//    very first message it looked at (which could be hours old) would get a
-//    reply. We now track a `chatKey` for whichever chat is open and, every
-//    time the open chat changes (including the very first run), we seed
-//    every message currently on screen into `processedMsgIds` WITHOUT
-//    replying. Only messages that arrive after that point are treated as
-//    "new".
-// 2. Memory leak — `processedMsgIds` grew forever for as long as the tab
-//    stayed open. It's now a bounded FIFO (MAX_TRACKED ids).
-// 3. CPU usage — a MutationObserver on the whole `document.body` with
-//    subtree:true fires very often on WhatsApp Web (typing indicators, read
-//    receipts, timestamps). The callback is now debounced, and the
-//    redundant 1.5s interval poll (which did the exact same work) has been
-//    replaced with a much less frequent safety-net interval.
-const MAX_TRACKED_IDS = 300
-const processedMsgIds = new Set<string>()
-let lastChatKey: string | null = null
-
-function rememberMsgId(id: string): void {
-  processedMsgIds.add(id)
-  if (processedMsgIds.size > MAX_TRACKED_IDS) {
-    const oldest = processedMsgIds.values().next().value
-    if (oldest !== undefined) processedMsgIds.delete(oldest)
-  }
-}
-
-function getCurrentChatKey(): string | null {
-  const header = document.querySelector('header [title]') || document.querySelector('#main header')
-  const label = header?.textContent?.trim()
-  return label ? label.slice(0, 100) : null
-}
-
-function getIncomingMessageNodes(): HTMLElement[] {
-  return Array.from(
-    document.querySelectorAll('div.message-in, [class*="message-in"], div[data-id^="false_"]')
-  ) as HTMLElement[]
-}
-
-function getMsgId(node: HTMLElement): string {
-  return node.getAttribute('data-id') ||
-    node.getAttribute('data-message-id') ||
-    (node.textContent || '').slice(-50)
-}
-
-export function checkAndAutoReply(): void {
-  if (!isExtensionValid()) return
-
-  getAutoReplyEnabled().then(async (enabled) => {
-    if (!enabled) return
-
-    const incomingNodes = getIncomingMessageNodes()
-    if (incomingNodes.length === 0) return
-
-    // If the open chat changed (including first activation), seed every
-    // message currently visible as "already seen" and skip replying this
-    // round — we only want to react to messages that arrive from now on.
-    const chatKey = getCurrentChatKey()
-    if (chatKey !== lastChatKey) {
-      lastChatKey = chatKey
-      for (const node of incomingNodes) {
-        rememberMsgId(getMsgId(node))
-      }
-      return
-    }
-
-    const rules = await getAutoReplyRules()
-    if (rules.length === 0) return
-    const mode = await getAutoReplyMode()
-
-    // Get the last incoming message element
-    const lastMsgNode = incomingNodes[incomingNodes.length - 1]
-    const msgId = getMsgId(lastMsgNode)
-
-    if (processedMsgIds.has(msgId)) return
-
-    // Mark as processed so we don't reply multiple times
-    rememberMsgId(msgId)
-
-    // Extract text content
-    const textEl = lastMsgNode.querySelector('.selectable-text') ||
-                   lastMsgNode.querySelector('.copyable-text') ||
-                   lastMsgNode.querySelector('span[dir="ltr"]') ||
-                   lastMsgNode.querySelector('span[dir="rtl"]')
-
-    if (!textEl || !textEl.textContent) return
-    const incomingText = textEl.textContent.trim().toLowerCase()
-
-    let replyText = ''
-
-    if (mode === 'all') {
-      replyText = rules[0]?.reply || 'Halo! Pesan Anda telah kami terima.'
-    } else {
-      for (const r of rules) {
-        if (!r.active) continue
-        const keywords = r.keywords.split(',').map(k => k.trim().toLowerCase())
-        if (keywords.some(k => k && incomingText.includes(k))) {
-          replyText = r.reply
-          break
-        }
-      }
-    }
-
-    if (replyText) {
-      console.log(`[AMAN CHAT] Auto-replying to "${incomingText}" with "${replyText}"`)
-      await new Promise(res => setTimeout(res, 800))
-      await sendRealMessage(replyText, 'instant')
-
-      const analytics = await getAnalytics()
-      analytics.autoRepliesTriggered += 1
-      await setAnalytics(analytics)
-    }
-  })
-}
-
 const debouncedCheck = debounce(() => checkAndAutoReply(), 400)
 
 export function initAutoReplyObserver(): void {
@@ -439,8 +512,6 @@ export function initAutoReplyObserver(): void {
   observer.observe(document.body, { childList: true, subtree: true })
 
   // 2. Low-frequency safety-net poll, in case a relevant mutation is missed
-  //    (e.g. observer briefly disconnected). Much less aggressive than the
-  //    old 1.5s interval since the observer now does the real-time work.
   setInterval(() => {
     checkAndAutoReply()
   }, 5000)
