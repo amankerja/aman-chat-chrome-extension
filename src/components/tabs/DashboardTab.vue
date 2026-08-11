@@ -8,9 +8,12 @@
           <rect x="14" y="12" width="7" height="9" rx="1"/>
           <rect x="3" y="16" width="7" height="5" rx="1"/>
         </svg>
-        Dashboard Summary
+        Dashboard Laporan & Analitik
       </h2>
-      <button class="ac-btn secondary sm" @click="refreshData">Refresh</button>
+      <div style="display: flex; gap: 6px;">
+        <button class="ac-btn secondary sm" @click="exportReportCSV">📊 Ekspor Laporan</button>
+        <button class="ac-btn secondary sm" @click="refreshData">Refresh</button>
+      </div>
     </div>
 
     <!-- Metrics Grid -->
@@ -30,6 +33,29 @@
       <div class="ac-stat-box">
         <span class="ac-stat-label">Kontak CRM</span>
         <span class="ac-stat-value">{{ crmCount }}</span>
+      </div>
+    </div>
+
+    <!-- Success Rate & Performance Card -->
+    <div class="ac-card">
+      <div class="ac-section-header">
+        <h3 class="ac-label">Tingkat Keberhasilan Pengiriman</h3>
+        <span class="ac-badge loading" style="font-size: 0.72rem;">{{ successRate }}% Sukses</span>
+      </div>
+
+      <div class="ac-progress-bar-bg" style="margin-top: 8px;">
+        <div class="ac-progress-bar-fill" :style="{ width: successRate + '%' }"></div>
+      </div>
+
+      <div class="ac-grid-2" style="margin-top: 10px;">
+        <div style="display: flex; flex-direction: column;">
+          <span class="ac-subtext">Total Kampanye Broadcast</span>
+          <span class="ac-stat-value" style="font-size: 1rem;">{{ analytics.campaignsCount }} Kampanye</span>
+        </div>
+        <div style="display: flex; flex-direction: column; text-align: right;">
+          <span class="ac-subtext">Gagal Kirim</span>
+          <span class="ac-stat-value" style="font-size: 1rem; color: #b91c1c;">{{ analytics.totalFailed }} Pesan</span>
+        </div>
       </div>
     </div>
 
@@ -98,15 +124,26 @@
         </div>
       </div>
     </div>
+
+    <!-- Reset Statistics Card -->
+    <div class="ac-card" style="border-color: #fee2e2;">
+      <div class="ac-section-header">
+        <div>
+          <h3 class="ac-label" style="color: #b91c1c;">Reset Statistik</h3>
+          <p class="ac-subtext">Bersihkan counter laporan statistik broadcast & auto-reply</p>
+        </div>
+        <button class="ac-btn danger sm" @click="resetAnalyticsData">Reset Statistik</button>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import type { Analytics, FollowUpTask } from '../../types'
-import { getAnalytics, getFollowUpTasks, setFollowUpTasks, getCRMContacts, getPrivacySettings, setPrivacySettings } from '../../utils/storage'
+import { getAnalytics, setAnalytics, getFollowUpTasks, setFollowUpTasks, getCRMContacts, getPrivacySettings, setPrivacySettings } from '../../utils/storage'
 import { openPhoneChat } from '../../utils/waAutomation'
-import { isValidPhoneNumber } from '../../utils/helpers'
+import { isValidPhoneNumber, downloadCSV, formatDate } from '../../utils/helpers'
 
 const analytics = ref<Analytics>({
   totalSent: 0,
@@ -124,6 +161,11 @@ const tasks = ref<FollowUpTask[]>([])
 const showAddTask = ref(false)
 const newTaskText = ref('')
 const newTaskContact = ref('')
+
+const successRate = computed(() => {
+  if (analytics.value.totalSent === 0) return 0
+  return Math.round((analytics.value.totalSuccess / analytics.value.totalSent) * 100)
+})
 
 async function refreshData() {
   analytics.value = await getAnalytics()
@@ -144,8 +186,6 @@ function startQuickChat() {
     alert('Nomor HP tidak valid. Gunakan format internasional, contoh: 628123456789')
     return
   }
-  // Was window.open(..., '_blank') — opened a whole new tab/session instead
-  // of just switching the chat in the current WhatsApp Web tab.
   openPhoneChat(quickPhone.value)
   quickPhone.value = ''
   showDirectChat.value = false
@@ -194,6 +234,37 @@ async function deleteTask(id: string) {
   await setFollowUpTasks(tasks.value)
 }
 
+function exportReportCSV() {
+  const dateStr = formatDate(new Date())
+  const csvContent = [
+    'METRIK LAPORAN AMAN CHAT,NILAI',
+    `Waktu Generate Laporan,${dateStr}`,
+    `Total Pesan Broadcast Terkirim,${analytics.value.totalSent}`,
+    `Broadcast Berhasil,${analytics.value.totalSuccess}`,
+    `Broadcast Gagal,${analytics.value.totalFailed}`,
+    `Tingkat Keberhasilan (%),${successRate.value}%`,
+    `Total Kampanye Broadcast,${analytics.value.campaignsCount}`,
+    `Auto Reply Ditrigger,${analytics.value.autoRepliesTriggered}`,
+    `Total Kontak CRM,${crmCount.value}`
+  ].join('\n')
+
+  downloadCSV(csvContent, `laporan-analitik-aman-chat-${Date.now()}.csv`)
+}
+
+async function resetAnalyticsData() {
+  if (confirm('Apakah Anda yakin ingin mereset seluruh data statistik analitik?')) {
+    const emptyStats: Analytics = {
+      totalSent: 0,
+      totalSuccess: 0,
+      totalFailed: 0,
+      autoRepliesTriggered: 0,
+      campaignsCount: 0
+    }
+    await setAnalytics(emptyStats)
+    analytics.value = emptyStats
+  }
+}
+
 onMounted(() => {
   refreshData()
 })
@@ -204,6 +275,18 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+.ac-progress-bar-bg {
+  width: 100%;
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.ac-progress-bar-fill {
+  height: 100%;
+  background: #2563eb;
+  transition: width 0.3s ease;
 }
 .ac-task-list {
   display: flex;
