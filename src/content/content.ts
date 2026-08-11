@@ -41,20 +41,50 @@ function toggleSidebar(): void {
   toggleSidebarState()
 }
 
+import { watch } from 'vue'
+
+const CHAT_ICON_SVG = `
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+  </svg>
+`
+
+const CLOSE_ICON_SVG = `
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22">
+    <line x1="18" y1="6" x2="6" y2="18"></line>
+    <line x1="6" y1="6" x2="18" y2="18"></line>
+  </svg>
+`
+
+function updateToggleButtonUI(isOpen: boolean): void {
+  const btn = document.getElementById('ac-toggle-btn')
+  if (!btn) return
+
+  if (isOpen) {
+    btn.classList.add('is-open')
+    btn.innerHTML = CLOSE_ICON_SVG
+    btn.title = 'Tutup AMAN CHAT (Alt+A)'
+  } else {
+    btn.classList.remove('is-open')
+    btn.innerHTML = CHAT_ICON_SVG
+    btn.title = 'Buka AMAN CHAT (Alt+A)'
+  }
+}
+
 function createToggleButton(): void {
   if (document.getElementById('ac-toggle-btn')) return
 
   const btn = document.createElement('button')
   btn.id = 'ac-toggle-btn'
   btn.className = 'ac-toggle-btn'
-  btn.innerHTML = `
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="28" height="28">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-    </svg>
-  `
-  btn.title = 'Buka AMAN CHAT'
   btn.addEventListener('click', toggleSidebar)
   document.body.appendChild(btn)
+
+  updateToggleButtonUI(sidebarState.isOpen)
+
+  watch(() => sidebarState.isOpen, (isOpen) => {
+    updateToggleButtonUI(isOpen)
+  })
 }
 
 function applyPrivacyStyles(privacy: Record<string, boolean> | undefined): void {
