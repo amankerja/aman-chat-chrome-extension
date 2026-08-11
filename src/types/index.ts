@@ -5,7 +5,7 @@ export interface Template {
   category?: string
 }
 
-export type MatchType = 'contains' | 'exact' | 'starts_with' | 'regex'
+export type MatchType = 'contains' | 'exact' | 'startsWith' | 'starts_with' | 'regex'
 
 export interface AutoReplyRule {
   id: string
@@ -13,6 +13,23 @@ export interface AutoReplyRule {
   reply: string
   active: boolean
   matchType?: MatchType
+}
+
+export interface AutoReplySchedule {
+  enabled: boolean
+  /** 0-23 */
+  startHour: number
+  /** 0-23 */
+  endHour: number
+  outsideHoursReply: string
+}
+
+export interface AutoReplyAdvancedSettings {
+  schedule: AutoReplySchedule
+  defaultReplyEnabled: boolean
+  defaultReply: string
+  /** Minimum minutes before auto-replying to the same chat again. */
+  cooldownMinutes: number
 }
 
 export interface AutoReplySettings {
@@ -52,6 +69,15 @@ export interface BroadcastState {
   attachment?: File
   numberStatuses?: NumberStatus[]
   typingMode: 'character' | 'instant'
+  /** How many times to retry a number that times out / fails before giving up. */
+  maxRetries?: number
+  /** Insert a longer cooldown every N sends to look less bot-like. */
+  batchCooldownEvery?: number
+  batchCooldownSeconds?: number
+  /** Numbers that failed on the most recent run, for a quick "retry failed only". */
+  failedNumbers?: string[]
+  /** True if this run was interrupted (tab/page reloaded) mid-broadcast. */
+  interrupted?: boolean
   useBatching?: boolean
   batchSize?: number
   batchDelayMinutes?: number
@@ -90,6 +116,15 @@ export interface Analytics {
   totalFailed: number
   autoRepliesTriggered: number
   campaignsCount: number
+}
+
+export interface DailyStat {
+  /** 'YYYY-MM-DD' in the user's local timezone */
+  date: string
+  sent: number
+  success: number
+  failed: number
+  autoReplies: number
 }
 
 export interface CustomTab {
@@ -132,3 +167,4 @@ export const WA_SELECTORS: WhatsAppSelectors = {
   messageIn: '[class*="message-in"]',
   messageOut: '[class*="message-out"]'
 }
+

@@ -14,6 +14,19 @@
       </span>
     </div>
 
+    <!-- Resume-after-reload banner -->
+    <div class="ac-card ac-resume-banner" v-if="showResumeBanner">
+      <p class="ac-label" style="margin: 0 0 6px;">⚠️ Broadcast sebelumnya terhenti (halaman ter-reload)</p>
+      <p class="ac-subtext" style="margin-bottom: 10px;">
+        Progress terakhir: {{ broadcastState.currentIndex }} / {{ broadcastState.numbers.length }} nomor.
+        Lanjutkan dari nomor berikutnya, atau anggap selesai.
+      </p>
+      <div class="ac-grid-2">
+        <button class="ac-btn primary sm" @click="resumeInterruptedBroadcast">▶ Lanjutkan Broadcast</button>
+        <button class="ac-btn secondary sm" @click="dismissResumeBanner">Abaikan</button>
+      </div>
+    </div>
+
     <!-- Receiver Input Card -->
     <div class="ac-card">
       <div class="ac-section-header">
@@ -29,7 +42,10 @@
         placeholder="Masukkan nomor HP (satu nomor per baris, contoh: 628123456789)"
         :disabled="broadcastState.status === 'sending'"
       ></textarea>
-      <span class="ac-subtext">Total terdeteksi: {{ parsedNumbers.length }} nomor</span>
+      <span class="ac-subtext">
+        Total terdeteksi: {{ parsedNumbers.length }} nomor unik
+        <template v-if="duplicateCount > 0">({{ duplicateCount }} duplikat otomatis dihapus)</template>
+      </span>
     </div>
 
     <!-- Message Content Card -->
@@ -100,6 +116,28 @@
       </div>
     </div>
 
+    <!-- Reliability Settings -->
+    <div class="ac-card">
+      <h3 class="ac-label">Keandalan & Keamanan Akun</h3>
+      <div class="ac-grid-2">
+        <div class="ac-form-group">
+          <label class="ac-label">Coba Ulang Jika Gagal</label>
+          <input type="number" v-model.number="broadcastState.maxRetries" min="0" max="5" class="ac-input" />
+          <span class="ac-subtext">Kali percobaan tambahan per nomor</span>
+        </div>
+        <div class="ac-form-group">
+          <label class="ac-label">Jeda Panjang Tiap</label>
+          <input type="number" v-model.number="broadcastState.batchCooldownEvery" min="0" max="200" class="ac-input" />
+          <span class="ac-subtext">Pesan (0 = nonaktif)</span>
+        </div>
+      </div>
+      <div class="ac-form-group">
+        <label class="ac-label">Durasi Jeda Panjang (Detik)</label>
+        <input type="number" v-model.number="broadcastState.batchCooldownSeconds" min="5" max="600" class="ac-input" />
+        <span class="ac-subtext">Jeda ekstra ini membuat pola kirim terlihat lebih manusiawi, mengurangi risiko nomor Anda dibatasi WhatsApp.</span>
+      </div>
+    </div>
+
     <!-- Progress & Controls Card -->
     <div class="ac-card">
       <h3 class="ac-label">Kontrol & Progress Real</h3>
@@ -117,6 +155,19 @@
           <span class="ac-stat-label">Proses</span>
           <span class="ac-stat-value" style="color: #15803d;">{{ broadcastState.currentIndex }}</span>
         </div>
+        <div class="ac-stat-box">
+          <span class="ac-stat-label">Gagal</span>
+          <span class="ac-stat-value" style="color: #dc2626;">{{ broadcastState.failedNumbers?.length || 0 }}</span>
+        </div>
+      </div>
+
+      <div
+        v-if="broadcastState.status === 'completed' && (broadcastState.failedNumbers?.length || 0) > 0"
+        class="ac-form-group" style="margin-top: 8px;"
+      >
+        <button class="ac-btn secondary sm" @click="retryFailedOnly">
+          🔁 Kirim Ulang ke {{ broadcastState.failedNumbers?.length }} Nomor yang Gagal
+        </button>
       </div>
 
       <div class="ac-grid-2" style="margin-top: 8px;">
@@ -177,10 +228,13 @@ import {
   runRealBroadcast,
   pauseRealBroadcast,
   resumeRealBroadcast,
-  stopRealBroadcast
+  stopRealBroadcast,
+  isBroadcastActuallyRunning
 } from '../../utils/waAutomation'
 
 const rawNumbers = ref('')
+const showResumeBanner = ref(false)
+const duplicateCount = ref(0)
 
 const broadcastState = ref<BroadcastState>({
   status: 'idle',
@@ -192,14 +246,33 @@ const broadcastState = ref<BroadcastState>({
   minInterval: 3,
   maxInterval: 7,
   logs: [],
-  typingMode: 'instant'
+  typingMode: 'instant',
+  maxRetries: 1,
+  batchCooldownEvery: 20,
+  batchCooldownSeconds: 45,
+  useBatching: false,
+  batchSize: 10,
+  batchDelayMinutes: 2,
+  enableSpintax: true,
+  failedNumbers: []
 })
 
 const parsedNumbers = computed(() => {
-  return rawNumbers.value
+  const raw = rawNumbers.value
     .split('\n')
     .map(n => n.replace(/[^0-9]/g, ''))
     .filter(n => n.length >= 8)
+
+  const seen = new Set<string>()
+  const unique: string[] = []
+  for (const n of raw) {
+    if (!seen.has(n)) {
+      seen.add(n)
+      unique.push(n)
+    }
+  }
+  duplicateCount.value = raw.length - unique.length
+  return unique
 })
 
 const progressPercentage = computed(() => {
@@ -212,15 +285,20 @@ async function loadSavedState() {
   if (saved) {
     if (!Array.isArray(saved.logs)) saved.logs = []
     if (!Array.isArray(saved.numbers)) saved.numbers = []
-    broadcastState.value = saved
+    broadcastState.value = {
+      ...broadcastState.value,
+      ...saved
+    }
     if (saved.numbers.length > 0) {
       rawNumbers.value = saved.numbers.join('\n')
+    }
+
+    if (saved.status === 'sending' && !isBroadcastActuallyRunning()) {
+      showResumeBanner.value = true
     }
   }
 }
 
-// Fix: listening for chrome.storage.onChanged keeps the UI live no matter
-// how many times the tab is switched away and back.
 function handleStorageChange(changes: Record<string, chrome.storage.StorageChange>, areaName: string) {
   if (areaName === 'local' && changes.wku_broadcast_state) {
     const newState = changes.wku_broadcast_state.newValue as BroadcastState | undefined
@@ -262,44 +340,111 @@ function handleCSVImport(event: Event) {
   reader.readAsText(file)
 }
 
+function onBroadcastProgress(progress: { index: number; total: number; log: string; done?: boolean; failedNumbers?: string[] }) {
+  broadcastState.value.currentIndex = progress.index
+  if (!Array.isArray(broadcastState.value.logs)) {
+    broadcastState.value.logs = []
+  }
+  broadcastState.value.logs.push(progress.log)
+  if (progress.failedNumbers) {
+    broadcastState.value.failedNumbers = progress.failedNumbers
+  }
+
+  if (progress.done) {
+    broadcastState.value.status = 'completed'
+  }
+
+  saveCurrentState()
+}
+
 async function startBroadcast() {
   if (parsedNumbers.value.length === 0 || !broadcastState.value.message) return
 
   broadcastState.value.status = 'sending'
   broadcastState.value.currentIndex = 0
   broadcastState.value.logs = []
+  broadcastState.value.failedNumbers = []
   await saveCurrentState()
 
-  runRealBroadcast(
-    parsedNumbers.value,
-    broadcastState.value.message,
-    broadcastState.value.message2,
-    broadcastState.value.useTwoMessages,
-    broadcastState.value.minInterval || 3,
-    broadcastState.value.maxInterval || 7,
-    broadcastState.value.typingMode || 'instant',
-    (progress) => {
-      broadcastState.value.currentIndex = progress.index
+  runRealBroadcast({
+    numbers: parsedNumbers.value,
+    message1: broadcastState.value.message,
+    message2: broadcastState.value.message2,
+    useTwoMessages: broadcastState.value.useTwoMessages,
+    minInterval: broadcastState.value.minInterval || 3,
+    maxInterval: broadcastState.value.maxInterval || 7,
+    typingMode: broadcastState.value.typingMode || 'instant',
+    maxRetries: broadcastState.value.maxRetries ?? 1,
+    batchCooldownEvery: broadcastState.value.batchCooldownEvery ?? 20,
+    batchCooldownSeconds: broadcastState.value.batchCooldownSeconds ?? 45,
+    useBatching: broadcastState.value.useBatching || false,
+    batchSize: broadcastState.value.batchSize || 10,
+    batchDelayMinutes: broadcastState.value.batchDelayMinutes || 2,
+    enableSpintax: broadcastState.value.enableSpintax ?? true,
+    onProgress: onBroadcastProgress
+  })
+}
 
-      if (!Array.isArray(broadcastState.value.logs)) {
-        broadcastState.value.logs = []
-      }
+async function resumeInterruptedBroadcast() {
+  showResumeBanner.value = false
+  broadcastState.value.status = 'sending'
+  const startIndex = broadcastState.value.currentIndex
+  await saveCurrentState()
 
-      broadcastState.value.logs.push(progress.log)
+  runRealBroadcast({
+    numbers: broadcastState.value.numbers,
+    message1: broadcastState.value.message,
+    message2: broadcastState.value.message2,
+    useTwoMessages: broadcastState.value.useTwoMessages,
+    minInterval: broadcastState.value.minInterval || 3,
+    maxInterval: broadcastState.value.maxInterval || 7,
+    typingMode: broadcastState.value.typingMode || 'instant',
+    maxRetries: broadcastState.value.maxRetries ?? 1,
+    batchCooldownEvery: broadcastState.value.batchCooldownEvery ?? 20,
+    batchCooldownSeconds: broadcastState.value.batchCooldownSeconds ?? 45,
+    useBatching: broadcastState.value.useBatching || false,
+    batchSize: broadcastState.value.batchSize || 10,
+    batchDelayMinutes: broadcastState.value.batchDelayMinutes || 2,
+    enableSpintax: broadcastState.value.enableSpintax ?? true,
+    startIndex,
+    onProgress: onBroadcastProgress
+  })
+}
 
-      if (progress.done) {
-        broadcastState.value.status = 'completed'
-      }
+function dismissResumeBanner() {
+  showResumeBanner.value = false
+  broadcastState.value.status = 'completed'
+  saveCurrentState()
+}
 
-      saveCurrentState()
-    },
-    {
-      useBatching: broadcastState.value.useBatching || false,
-      batchSize: broadcastState.value.batchSize || 10,
-      batchDelayMinutes: broadcastState.value.batchDelayMinutes || 2,
-      enableSpintax: broadcastState.value.enableSpintax ?? true
-    }
-  )
+async function retryFailedOnly() {
+  const failed = broadcastState.value.failedNumbers || []
+  if (failed.length === 0) return
+
+  rawNumbers.value = failed.join('\n')
+  broadcastState.value.status = 'sending'
+  broadcastState.value.currentIndex = 0
+  broadcastState.value.logs.push(`[${new Date().toLocaleTimeString('id-ID')}] --- Mengirim ulang ke ${failed.length} nomor yang gagal ---`)
+  broadcastState.value.failedNumbers = []
+  await saveCurrentState()
+
+  runRealBroadcast({
+    numbers: failed,
+    message1: broadcastState.value.message,
+    message2: broadcastState.value.message2,
+    useTwoMessages: broadcastState.value.useTwoMessages,
+    minInterval: broadcastState.value.minInterval || 3,
+    maxInterval: broadcastState.value.maxInterval || 7,
+    typingMode: broadcastState.value.typingMode || 'instant',
+    maxRetries: broadcastState.value.maxRetries ?? 1,
+    batchCooldownEvery: broadcastState.value.batchCooldownEvery ?? 20,
+    batchCooldownSeconds: broadcastState.value.batchCooldownSeconds ?? 45,
+    useBatching: broadcastState.value.useBatching || false,
+    batchSize: broadcastState.value.batchSize || 10,
+    batchDelayMinutes: broadcastState.value.batchDelayMinutes || 2,
+    enableSpintax: broadcastState.value.enableSpintax ?? true,
+    onProgress: onBroadcastProgress
+  })
 }
 
 function pauseBroadcast() {
@@ -346,6 +491,10 @@ onUnmounted(() => {
   font-size: 0.72rem;
   color: #64748b;
 }
+.ac-resume-banner {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+}
 .ac-checkbox-label {
   font-size: 0.78rem;
   font-weight: 500;
@@ -379,3 +528,4 @@ onUnmounted(() => {
   gap: 4px;
 }
 </style>
+

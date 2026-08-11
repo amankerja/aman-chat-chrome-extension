@@ -2,10 +2,12 @@ import type {
   Template,
   AutoReplyRule,
   AutoReplySettings,
+  AutoReplyAdvancedSettings,
   CRMContact,
   PrivacySettings,
   FollowUpTask,
   Analytics,
+  DailyStat,
   CustomTab,
   BroadcastState
 } from '../types'
@@ -17,6 +19,8 @@ const STORAGE_KEYS = {
   AUTOREPLY_ENABLED: 'wku_autoreply_enabled',
   AUTOREPLY_MODE: 'wku_autoreply_mode',
   AUTOREPLY_SETTINGS: 'wku_autoreply_settings',
+  AUTOREPLY_ADVANCED: 'wku_autoreply_advanced',
+  DAILY_STATS: 'wku_daily_stats',
   CRM_CONTACTS: 'wku_crm_contacts',
   BROADCAST_STATE: 'wku_broadcast_state',
   FOLLOWUP_TASKS: 'wku_followup_tasks',
@@ -50,6 +54,18 @@ const DEFAULT_ANALYTICS: Analytics = {
   totalFailed: 0,
   autoRepliesTriggered: 0,
   campaignsCount: 0
+}
+
+const DEFAULT_AUTOREPLY_ADVANCED: AutoReplyAdvancedSettings = {
+  schedule: {
+    enabled: false,
+    startHour: 9,
+    endHour: 21,
+    outsideHoursReply: 'Halo! Saat ini di luar jam layanan kami (09:00-21:00). Pesan Anda akan kami balas secepatnya.'
+  },
+  defaultReplyEnabled: false,
+  defaultReply: 'Terima kasih atas pesannya, mohon tunggu ya, admin kami akan segera membalas.',
+  cooldownMinutes: 3
 }
 
 const DEFAULT_AUTOREPLY_SETTINGS: AutoReplySettings = {
@@ -157,6 +173,14 @@ export function setAutoReplyAdvancedSettings(settings: AutoReplySettings): Promi
   return setStorage<AutoReplySettings>(STORAGE_KEYS.AUTOREPLY_SETTINGS, settings)
 }
 
+export function getAutoReplyAdvanced(): Promise<AutoReplyAdvancedSettings> {
+  return getStorage<AutoReplyAdvancedSettings>(STORAGE_KEYS.AUTOREPLY_ADVANCED, DEFAULT_AUTOREPLY_ADVANCED)
+}
+
+export function setAutoReplyAdvanced(settings: AutoReplyAdvancedSettings): Promise<void> {
+  return setStorage<AutoReplyAdvancedSettings>(STORAGE_KEYS.AUTOREPLY_ADVANCED, settings)
+}
+
 export function getCRMContacts(): Promise<CRMContact[]> {
   return getStorage<CRMContact[]>(STORAGE_KEYS.CRM_CONTACTS, [])
 }
@@ -196,6 +220,38 @@ export function getAnalytics(): Promise<Analytics> {
 
 export function setAnalytics(analytics: Analytics): Promise<void> {
   return setStorage<Analytics>(STORAGE_KEYS.ANALYTICS, analytics)
+}
+
+function todayKey(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+export function getDailyStatsMap(): Promise<Record<string, DailyStat>> {
+  return getStorage<Record<string, DailyStat>>(STORAGE_KEYS.DAILY_STATS, {})
+}
+
+export function setDailyStatsMap(map: Record<string, DailyStat>): Promise<void> {
+  return setStorage<Record<string, DailyStat>>(STORAGE_KEYS.DAILY_STATS, map)
+}
+
+/** Increments today's counters in one read-modify-write, and prunes entries older than 90 days so storage doesn't grow forever. */
+export async function bumpDailyStat(delta: Partial<Pick<DailyStat, 'sent' | 'success' | 'failed' | 'autoReplies'>>): Promise<void> {
+  const map = await getDailyStatsMap()
+  const key = todayKey()
+  const existing = map[key] || { date: key, sent: 0, success: 0, failed: 0, autoReplies: 0 }
+  existing.sent += delta.sent || 0
+  existing.success += delta.success || 0
+  existing.failed += delta.failed || 0
+  existing.autoReplies += delta.autoReplies || 0
+  map[key] = existing
+
+  const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000
+  for (const dateKey of Object.keys(map)) {
+    if (new Date(dateKey).getTime() < cutoff) delete map[dateKey]
+  }
+
+  await setDailyStatsMap(map)
 }
 
 export function getCustomTabs(): Promise<CustomTab[]> {
@@ -239,4 +295,5 @@ export async function initializeStorage(): Promise<void> {
   await setAnalytics(analytics)
 }
 
-export { STORAGE_KEYS, DEFAULT_TEMPLATES, DEFAULT_PRIVACY, DEFAULT_ANALYTICS }
+export { STORAGE_KEYS, DEFAULT_TEMPLATES, DEFAULT_PRIVACY, DEFAULT_ANALYTICS, DEFAULT_AUTOREPLY_ADVANCED, DEFAULT_AUTOREPLY_SETTINGS }
+

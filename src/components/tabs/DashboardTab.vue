@@ -3,16 +3,12 @@
     <!-- Header Title & Date Filter -->
     <div class="ac-section-header">
       <div>
-        <h2 class="ac-dashboard-title">Ringkasan Hari Ini</h2>
-        <span class="ac-subtext">Pantau statistik aktivitas WhatsApp Business Anda secara real-time</span>
+        <h2 class="ac-dashboard-title">Ringkasan Aktivitas</h2>
+        <span class="ac-subtext">Pantau statistik & performa WhatsApp Business Anda secara real-time</span>
       </div>
       <div style="display: flex; gap: 8px; align-items: center;">
-        <select class="ac-select-sm">
-          <option>Hari Ini ▾</option>
-          <option>7 Hari Terakhir</option>
-          <option>30 Hari Terakhir</option>
-        </select>
-        <button class="ac-btn secondary sm" @click="exportReportCSV">📊 Ekspor</button>
+        <button class="ac-btn secondary sm" @click="refreshData">🔄 Refresh</button>
+        <button class="ac-btn secondary sm" @click="exportReportCSV">📊 Ekspor Laporan</button>
       </div>
     </div>
 
@@ -24,8 +20,8 @@
           <span class="ac-stat-card-icon">📤</span>
         </div>
         <div class="ac-stat-card-value">{{ analytics.totalSent }}</div>
-        <div class="ac-trend-badge green">
-          <span>↑ 14%</span> vs kemarin
+        <div class="ac-trend-badge gray">
+          <span>Total broadcast</span>
         </div>
       </div>
 
@@ -36,7 +32,7 @@
         </div>
         <div class="ac-stat-card-value text-green">{{ analytics.totalSuccess }}</div>
         <div class="ac-trend-badge green">
-          <span>{{ successRate }}%</span> success rate
+          <span>{{ successRatePct }}%</span> success rate
         </div>
       </div>
 
@@ -47,7 +43,7 @@
         </div>
         <div class="ac-stat-card-value text-blue">{{ analytics.autoRepliesTriggered }}</div>
         <div class="ac-trend-badge green">
-          <span>↑ 8%</span> ditrigger
+          <span>Terpanggil otomatis</span>
         </div>
       </div>
 
@@ -63,38 +59,85 @@
       </div>
     </div>
 
+    <!-- Weekly 7-Day Trend Chart -->
+    <div class="ac-card">
+      <div class="ac-section-header">
+        <h3 class="ac-label">Tren 7 Hari Terakhir</h3>
+        <span class="ac-badge" :class="successRateBadgeClass">Success rate: {{ successRatePct }}%</span>
+      </div>
+      <svg :viewBox="`0 0 ${chartWidth} ${chartHeight}`" class="ac-bar-chart" preserveAspectRatio="xMidYMid meet">
+        <g v-for="(day, i) in dailyTrend" :key="day.date">
+          <rect
+            :x="i * barSlotWidth + 6"
+            :y="chartHeight - 16 - barHeight(day.success)"
+            :width="barWidth"
+            :height="barHeight(day.success)"
+            fill="#22c55e"
+            rx="2"
+          />
+          <rect
+            :x="i * barSlotWidth + 6 + barWidth + 3"
+            :y="chartHeight - 16 - barHeight(day.failed)"
+            :width="barWidth"
+            :height="barHeight(day.failed)"
+            fill="#ef4444"
+            rx="2"
+          />
+          <text :x="i * barSlotWidth + barSlotWidth / 2" :y="chartHeight - 4" text-anchor="middle" class="ac-chart-label">{{ day.shortLabel }}</text>
+        </g>
+      </svg>
+      <div class="ac-chart-legend">
+        <span><i class="ac-dot" style="background:#22c55e"></i> Berhasil</span>
+        <span><i class="ac-dot" style="background:#ef4444"></i> Gagal</span>
+        <span><i class="ac-dot" style="background:#2563eb"></i> Auto Reply 7 Hari: {{ weeklyAutoReplies }}</span>
+      </div>
+    </div>
+
+    <!-- CRM Pipeline Breakdown -->
+    <div class="ac-card" v-if="crmCount > 0">
+      <h3 class="ac-label">Pipeline CRM</h3>
+      <div class="ac-pipeline-list">
+        <div v-for="stage in pipelineBreakdown" :key="stage.key" class="ac-pipeline-row">
+          <span class="ac-pipeline-label">{{ stage.label }}</span>
+          <div class="ac-pipeline-bar-bg">
+            <div class="ac-pipeline-bar-fill" :style="{ width: stage.pct + '%', background: stage.color }"></div>
+          </div>
+          <span class="ac-pipeline-count">{{ stage.count }}</span>
+        </div>
+      </div>
+    </div>
+
     <!-- Activity Timeline -->
     <div class="ac-card">
       <div class="ac-section-header">
         <h3 class="ac-label">Aktivitas Terkini (Timeline)</h3>
-        <button class="ac-btn secondary sm" @click="refreshData">Refresh</button>
       </div>
 
       <div class="ac-activity-timeline">
         <div class="ac-activity-item">
-          <span class="ac-activity-time">Baru Saja</span>
+          <span class="ac-activity-time">Real-time</span>
           <span class="ac-activity-icon">📢</span>
           <div class="ac-activity-content">
             <span class="ac-activity-title">Broadcast Massal</span>
-            <span class="ac-activity-desc">Kampanye {{ analytics.campaignsCount }} berjalan aktif dengan rotasi Spintax</span>
+            <span class="ac-activity-desc">Kampanye {{ analytics.campaignsCount }} dijalankan dengan proteksi jeda & Spintax</span>
           </div>
         </div>
         <div class="ac-activity-divider"></div>
         <div class="ac-activity-item">
-          <span class="ac-activity-time">5 mnt lalu</span>
+          <span class="ac-activity-time">Otomatis</span>
           <span class="ac-activity-icon">🤖</span>
           <div class="ac-activity-content">
-            <span class="ac-activity-title">Auto Reply Ditrigger</span>
-            <span class="ac-activity-desc">Kata kunci cocok diproses dalam jeda cooldown</span>
+            <span class="ac-activity-title">Auto Reply Bot</span>
+            <span class="ac-activity-desc">Total {{ analytics.autoRepliesTriggered }} balasan otomatis telah diproses</span>
           </div>
         </div>
         <div class="ac-activity-divider"></div>
         <div class="ac-activity-item">
-          <span class="ac-activity-time">15 mnt lalu</span>
+          <span class="ac-activity-time">Aktif</span>
           <span class="ac-activity-icon">🔒</span>
           <div class="ac-activity-content">
-            <span class="ac-activity-title">Privasi & Security Blur</span>
-            <span class="ac-activity-desc">Proteksi blur chat aktif untuk keamanan percakapan</span>
+            <span class="ac-activity-title">Privasi & Keamanan</span>
+            <span class="ac-activity-desc">Sistem blur & PIN lock siap melindungi tampilan WhatsApp Web</span>
           </div>
         </div>
       </div>
@@ -181,8 +224,17 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import type { Analytics, FollowUpTask } from '../../types'
-import { getAnalytics, setAnalytics, getFollowUpTasks, setFollowUpTasks, getCRMContacts, getPrivacySettings, setPrivacySettings } from '../../utils/storage'
+import type { Analytics, FollowUpTask, CRMContact, DailyStat } from '../../types'
+import {
+  getAnalytics,
+  setAnalytics,
+  getFollowUpTasks,
+  setFollowUpTasks,
+  getCRMContacts,
+  getPrivacySettings,
+  setPrivacySettings,
+  getDailyStatsMap
+} from '../../utils/storage'
 import { openPhoneChat } from '../../utils/waAutomation'
 import { isValidPhoneNumber, downloadCSV, formatDate } from '../../utils/helpers'
 
@@ -194,7 +246,8 @@ const analytics = ref<Analytics>({
   campaignsCount: 0
 })
 
-const crmCount = ref(0)
+const crmContacts = ref<CRMContact[]>([])
+const crmCount = computed(() => crmContacts.value.length)
 const privacyActive = ref(false)
 const showDirectChat = ref(false)
 const quickPhone = ref('')
@@ -202,19 +255,87 @@ const tasks = ref<FollowUpTask[]>([])
 const showAddTask = ref(false)
 const newTaskText = ref('')
 const newTaskContact = ref('')
+const dailyStatsMap = ref<Record<string, DailyStat>>({})
 
-const successRate = computed(() => {
-  if (analytics.value.totalSent === 0) return 0
-  return Math.round((analytics.value.totalSuccess / analytics.value.totalSent) * 100)
+const DAY_LABELS = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab']
+
+const dailyTrend = computed(() => {
+  const days: (DailyStat & { shortLabel: string })[] = []
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date()
+    d.setDate(d.getDate() - i)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const existing = dailyStatsMap.value[key]
+    days.push({
+      date: key,
+      sent: existing?.sent || 0,
+      success: existing?.success || 0,
+      failed: existing?.failed || 0,
+      autoReplies: existing?.autoReplies || 0,
+      shortLabel: DAY_LABELS[d.getDay()]
+    })
+  }
+  return days
+})
+
+const weeklyAutoReplies = computed(() =>
+  dailyTrend.value.reduce((sum, d) => sum + d.autoReplies, 0)
+)
+
+const successRatePct = computed(() => {
+  const total = analytics.value.totalSuccess + analytics.value.totalFailed
+  if (total === 0) return analytics.value.totalSent > 0 ? Math.round((analytics.value.totalSuccess / analytics.value.totalSent) * 100) : 100
+  return Math.round((analytics.value.totalSuccess / total) * 100)
+})
+
+const successRateBadgeClass = computed(() =>
+  successRatePct.value >= 80 ? 'hauling' : successRatePct.value >= 50 ? 'queuing' : 'idle-status'
+)
+
+// Chart geometry
+const chartWidth = 294
+const chartHeight = 100
+const barSlotWidth = chartWidth / 7
+const barWidth = 12
+
+const maxDailyValue = computed(() =>
+  Math.max(1, ...dailyTrend.value.map(d => Math.max(d.success, d.failed)))
+)
+
+function barHeight(value: number): number {
+  const usableHeight = chartHeight - 20
+  return Math.round((value / maxDailyValue.value) * usableHeight)
+}
+
+const STAGE_META: Record<CRMContact['stage'], { label: string; color: string }> = {
+  lead: { label: 'Lead', color: '#94a3b8' },
+  prospect: { label: 'Prospect', color: '#f59e0b' },
+  customer: { label: 'Customer', color: '#22c55e' },
+  churned: { label: 'Churned', color: '#ef4444' }
+}
+
+const pipelineBreakdown = computed(() => {
+  const counts: Record<string, number> = { lead: 0, prospect: 0, customer: 0, churned: 0 }
+  for (const c of crmContacts.value) {
+    counts[c.stage] = (counts[c.stage] || 0) + 1
+  }
+  const max = Math.max(1, ...Object.values(counts))
+  return (Object.keys(STAGE_META) as CRMContact['stage'][]).map(key => ({
+    key,
+    label: STAGE_META[key].label,
+    color: STAGE_META[key].color,
+    count: counts[key] || 0,
+    pct: Math.round(((counts[key] || 0) / max) * 100)
+  }))
 })
 
 async function refreshData() {
   analytics.value = await getAnalytics()
-  const crm = await getCRMContacts()
-  crmCount.value = crm.length
+  crmContacts.value = await getCRMContacts()
   tasks.value = await getFollowUpTasks()
   const privacy = await getPrivacySettings()
   privacyActive.value = privacy.blurChats || privacy.blurMessages || privacy.blurAvatars
+  dailyStatsMap.value = await getDailyStatsMap()
 }
 
 function openDirectChat() {
@@ -233,7 +354,6 @@ function startQuickChat() {
 }
 
 async function togglePrivacy() {
-  const current = await getPrivacySettings()
   const nextVal = !privacyActive.value
   const newSettings = {
     blurChats: nextVal,
@@ -277,19 +397,30 @@ async function deleteTask(id: string) {
 
 function exportReportCSV() {
   const dateStr = formatDate(new Date())
-  const csvContent = [
-    'METRIK LAPORAN AMAN CHAT,NILAI',
-    `Waktu Generate Laporan,${dateStr}`,
-    `Total Pesan Broadcast Terkirim,${analytics.value.totalSent}`,
-    `Broadcast Berhasil,${analytics.value.totalSuccess}`,
-    `Broadcast Gagal,${analytics.value.totalFailed}`,
-    `Tingkat Keberhasilan (%),${successRate.value}%`,
-    `Total Kampanye Broadcast,${analytics.value.campaignsCount}`,
-    `Auto Reply Ditrigger,${analytics.value.autoRepliesTriggered}`,
-    `Total Kontak CRM,${crmCount.value}`
-  ].join('\n')
+  let csv = `METRIK LAPORAN AMAN CHAT,NILAI\n`
+  csv += `Waktu Generate Laporan,${dateStr}\n`
+  csv += `Total Pesan Broadcast Terkirim,${analytics.value.totalSent}\n`
+  csv += `Broadcast Berhasil,${analytics.value.totalSuccess}\n`
+  csv += `Broadcast Gagal,${analytics.value.totalFailed}\n`
+  csv += `Success Rate (%),${successRatePct.value}%\n`
+  csv += `Total Kampanye Broadcast,${analytics.value.campaignsCount}\n`
+  csv += `Auto Reply Ditrigger,${analytics.value.autoRepliesTriggered}\n`
+  csv += `Total Kontak CRM,${crmCount.value}\n\n`
 
-  downloadCSV(csvContent, `laporan-analitik-aman-chat-${Date.now()}.csv`)
+  csv += 'Pipeline CRM\n'
+  csv += 'Stage,Jumlah\n'
+  for (const stage of pipelineBreakdown.value) {
+    csv += `${stage.label},${stage.count}\n`
+  }
+  csv += '\n'
+
+  csv += 'Tren 7 Hari Terakhir\n'
+  csv += 'Tanggal,Terkirim,Berhasil,Gagal,Auto Reply\n'
+  for (const d of dailyTrend.value) {
+    csv += `${d.date},${d.sent},${d.success},${d.failed},${d.autoReplies}\n`
+  }
+
+  downloadCSV(csv, `laporan-analitik-aman-chat-${Date.now()}.csv`)
 }
 
 async function resetAnalyticsData() {
@@ -317,17 +448,65 @@ onMounted(() => {
   flex-direction: column;
   gap: 12px;
 }
-.ac-progress-bar-bg {
+.ac-bar-chart {
   width: 100%;
+  height: 100px;
+}
+.ac-chart-label {
+  font-size: 7px;
+  fill: #64748b;
+}
+.ac-chart-legend {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  font-size: 0.68rem;
+  color: #64748b;
+  align-items: center;
+}
+.ac-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 4px;
+}
+.ac-pipeline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+.ac-pipeline-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ac-pipeline-label {
+  width: 64px;
+  font-size: 0.72rem;
+  color: #334155;
+  flex-shrink: 0;
+}
+.ac-pipeline-bar-bg {
+  flex: 1;
   height: 8px;
   background: #e2e8f0;
   border-radius: 4px;
   overflow: hidden;
 }
-.ac-progress-bar-fill {
+.ac-pipeline-bar-fill {
   height: 100%;
-  background: #2563eb;
+  border-radius: 4px;
   transition: width 0.3s ease;
+}
+.ac-pipeline-count {
+  width: 24px;
+  text-align: right;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #334155;
 }
 .ac-task-list {
   display: flex;
@@ -361,3 +540,4 @@ onMounted(() => {
   color: #64748b;
 }
 </style>
+

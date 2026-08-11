@@ -40,7 +40,7 @@
       <div class="ac-toggle-row">
         <div>
           <h3 class="ac-label">⏰ Jadwal Jam Kerja</h3>
-          <p class="ac-subtext">Batasi Auto Reply hanya pada jam kerja toko/bisnis Anda</p>
+          <p class="ac-subtext">Kirim balasan khusus di luar jam operasional bisnis Anda</p>
         </div>
         <label class="ac-switch">
           <input type="checkbox" v-model="advancedSettings.useWorkingHours" @change="saveAdvancedSettings" />
@@ -100,7 +100,7 @@
         <select v-model="ruleForm.matchType" class="ac-select">
           <option value="contains">Mengandung Kata (contains)</option>
           <option value="exact">Persis Sama (exact)</option>
-          <option value="starts_with">Diawali Kata (starts_with)</option>
+          <option value="startsWith">Diawali Kata (startsWith)</option>
           <option value="regex">Regular Expression (regex)</option>
         </select>
       </div>
@@ -110,7 +110,8 @@
       </div>
       <div class="ac-form-group">
         <label class="ac-label">Pesan Balasan</label>
-        <textarea v-model="ruleForm.reply" class="ac-textarea" placeholder="Tuliskan jawaban otomatis..."></textarea>
+        <textarea v-model="ruleForm.reply" class="ac-textarea" placeholder="Tuliskan jawaban otomatis... bisa pakai {sapaan} dan {jam}"></textarea>
+        <p class="ac-subtext">Variabel: <code>{{ '{sapaan}' }}</code> → Pagi/Siang/Sore/Malam, <code>{{ '{jam}' }}</code> → jam saat ini</p>
       </div>
       <div class="ac-grid-2">
         <button class="ac-btn primary sm" :disabled="!ruleForm.keywords || !ruleForm.reply" @click="saveRule">
@@ -125,17 +126,20 @@
     <!-- Rules List -->
     <div class="ac-card">
       <h3 class="ac-label">Daftar Aturan Auto Reply</h3>
+      <p class="ac-subtext">Aturan paling atas diperiksa lebih dulu — gunakan panah untuk mengubah prioritas.</p>
       <div v-if="rules.length === 0" class="ac-empty-state">
         Belum ada aturan auto reply yang ditambahkan.
       </div>
       <div v-else class="ac-rule-list">
-        <div v-for="rule in rules" :key="rule.id" class="ac-rule-item">
+        <div v-for="(rule, idx) in rules" :key="rule.id" class="ac-rule-item">
           <div class="ac-rule-header">
             <div style="display: flex; align-items: center; gap: 6px;">
               <span class="ac-badge queuing ac-code-font">{{ rule.keywords }}</span>
-              <span class="ac-badge loading" style="font-size: 0.65rem;">{{ rule.matchType || 'contains' }}</span>
+              <span class="ac-badge loading" style="font-size: 0.65rem;">{{ matchTypeLabel(rule.matchType) }}</span>
             </div>
             <div class="ac-rule-controls">
+              <button class="ac-btn secondary sm" style="padding: 2px 6px;" :disabled="idx === 0" @click="moveRule(idx, -1)">↑</button>
+              <button class="ac-btn secondary sm" style="padding: 2px 6px;" :disabled="idx === rules.length - 1" @click="moveRule(idx, 1)">↓</button>
               <label class="ac-switch">
                 <input type="checkbox" v-model="rule.active" @change="updateRulesList" />
                 <span class="slider"></span>
@@ -161,7 +165,9 @@ import {
   getAutoReplyRules,
   setAutoReplyRules,
   getAutoReplyAdvancedSettings,
-  setAutoReplyAdvancedSettings
+  setAutoReplyAdvancedSettings,
+  getAutoReplyAdvanced,
+  setAutoReplyAdvanced
 } from '../../utils/storage'
 
 const autoReplyEnabled = ref(false)
@@ -188,11 +194,31 @@ const ruleForm = ref<{ keywords: string; reply: string; matchType: MatchType }>(
   matchType: 'contains'
 })
 
+function matchTypeLabel(type?: string): string {
+  if (type === 'exact') return 'sama persis'
+  if (type === 'startsWith' || type === 'starts_with') return 'diawali'
+  if (type === 'regex') return 'regex'
+  return 'mengandung'
+}
+
 async function loadSettings() {
   autoReplyEnabled.value = await getAutoReplyEnabled()
   autoReplyMode.value = await getAutoReplyMode()
   rules.value = await getAutoReplyRules()
   advancedSettings.value = await getAutoReplyAdvancedSettings()
+
+  const oldAdv = await getAutoReplyAdvanced()
+  if (oldAdv) {
+    if (oldAdv.cooldownMinutes && !advancedSettings.value.cooldownMinutes) {
+      advancedSettings.value.cooldownMinutes = oldAdv.cooldownMinutes
+    }
+    if (oldAdv.defaultReply && !advancedSettings.value.defaultReplyText) {
+      advancedSettings.value.defaultReplyText = oldAdv.defaultReply
+    }
+    if (oldAdv.schedule?.outsideHoursReply && !advancedSettings.value.outOfHoursReply) {
+      advancedSettings.value.outOfHoursReply = oldAdv.schedule.outsideHoursReply
+    }
+  }
 }
 
 async function saveMasterSettings() {
@@ -202,6 +228,17 @@ async function saveMasterSettings() {
 
 async function saveAdvancedSettings() {
   await setAutoReplyAdvancedSettings(advancedSettings.value)
+  await setAutoReplyAdvanced({
+    schedule: {
+      enabled: advancedSettings.value.useWorkingHours,
+      startHour: parseInt(advancedSettings.value.workingHoursStart.split(':')[0] || '8', 10),
+      endHour: parseInt(advancedSettings.value.workingHoursEnd.split(':')[0] || '17', 10),
+      outsideHoursReply: advancedSettings.value.outOfHoursReply
+    },
+    defaultReplyEnabled: advancedSettings.value.defaultReplyEnabled,
+    defaultReply: advancedSettings.value.defaultReplyText,
+    cooldownMinutes: advancedSettings.value.cooldownMinutes
+  })
 }
 
 async function saveRule() {
@@ -220,6 +257,15 @@ async function saveRule() {
 }
 
 async function updateRulesList() {
+  await setAutoReplyRules(rules.value)
+}
+
+async function moveRule(index: number, direction: -1 | 1) {
+  const target = index + direction
+  if (target < 0 || target >= rules.value.length) return
+  const list = [...rules.value]
+  ;[list[index], list[target]] = [list[target], list[index]]
+  rules.value = list
   await setAutoReplyRules(rules.value)
 }
 
@@ -277,3 +323,4 @@ onMounted(() => {
   color: #334155;
 }
 </style>
+

@@ -3,9 +3,11 @@ import {
   getAutoReplyMode,
   getAutoReplyRules,
   getAutoReplyAdvancedSettings,
+  getAutoReplyAdvanced,
   setAnalytics,
   getAnalytics,
-  isExtensionValid
+  isExtensionValid,
+  bumpDailyStat
 } from './storage'
 import { formatTimestamp, debounce, parseSpintax } from './helpers'
 import type { AutoReplyRule, AutoReplySettings } from '../types'
@@ -52,6 +54,7 @@ function matchesRuleKeyword(incomingText: string, rule: AutoReplyRule): boolean 
     switch (matchType) {
       case 'exact':
         return incomingText === k
+      case 'startsWith':
       case 'starts_with':
         return incomingText.startsWith(k)
       case 'regex':
@@ -65,6 +68,14 @@ function matchesRuleKeyword(incomingText: string, rule: AutoReplyRule): boolean 
         return incomingText.includes(k)
     }
   })
+}
+
+function applyReplyVariables(text: string): string {
+  const now = new Date()
+  const hour = now.getHours()
+  const sapaan = hour < 11 ? 'Pagi' : hour < 15 ? 'Siang' : hour < 19 ? 'Sore' : 'Malam'
+  const jam = `${String(hour).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+  return text.replace(/\{sapaan\}/gi, sapaan).replace(/\{jam\}/gi, jam)
 }
 
 function isWithinWorkingHours(settings: AutoReplySettings): boolean {
@@ -86,6 +97,13 @@ function isWithinWorkingHours(settings: AutoReplySettings): boolean {
   const endMinutes = (endH || 0) * 60 + (endM || 0)
 
   return currentMinutes >= startMinutes && currentMinutes <= endMinutes
+}
+
+function isWithinScheduleHours(startHour: number, endHour: number): boolean {
+  const hour = new Date().getHours()
+  if (startHour === endHour) return true
+  if (startHour < endHour) return hour >= startHour && hour < endHour
+  return hour >= startHour || hour < endHour
 }
 
 function isContactInCooldown(chatKey: string, cooldownMinutes: number): boolean {
@@ -127,10 +145,8 @@ export function checkAndAutoReply(): void {
 
     if (processedMsgIds.has(msgId)) return
 
-    // Mark as processed so we don't reply multiple times
     rememberMsgId(msgId)
 
-    // Extract text content
     const textEl = lastMsgNode.querySelector('.selectable-text') ||
                    lastMsgNode.querySelector('.copyable-text') ||
                    lastMsgNode.querySelector('span[dir="ltr"]') ||
@@ -140,17 +156,19 @@ export function checkAndAutoReply(): void {
     const incomingText = textEl.textContent.trim().toLowerCase()
 
     const settings = await getAutoReplyAdvancedSettings()
+    const advanced = await getAutoReplyAdvanced()
 
-    // 1. Cooldown Check
-    if (isContactInCooldown(chatKey, settings.cooldownMinutes)) {
+    const cooldownMin = settings.cooldownMinutes || advanced.cooldownMinutes || 3
+    if (isContactInCooldown(chatKey, cooldownMin)) {
       console.log(`[AMAN CHAT] Auto-reply skipped for "${chatKey}" (Cooldown active)`)
       return
     }
 
     let replyText = ''
 
-    // 2. Working Hours Check
-    if (settings.useWorkingHours && !isWithinWorkingHours(settings)) {
+    if (advanced.schedule?.enabled && !isWithinScheduleHours(advanced.schedule.startHour, advanced.schedule.endHour)) {
+      replyText = advanced.schedule.outsideHoursReply
+    } else if (settings.useWorkingHours && !isWithinWorkingHours(settings)) {
       if (settings.outOfHoursReply) {
         replyText = settings.outOfHoursReply
       } else {
@@ -158,7 +176,6 @@ export function checkAndAutoReply(): void {
         return
       }
     } else {
-      // Within Working Hours -> Evaluate Rules or Mode
       const rules = await getAutoReplyRules()
       const mode = await getAutoReplyMode()
 
@@ -172,14 +189,14 @@ export function checkAndAutoReply(): void {
           }
         }
 
-        // Default Reply Fallback
-        if (!replyText && settings.defaultReplyEnabled && settings.defaultReplyText) {
-          replyText = settings.defaultReplyText
+        if (!replyText && (settings.defaultReplyEnabled || advanced.defaultReplyEnabled)) {
+          replyText = settings.defaultReplyText || advanced.defaultReply || ''
         }
       }
     }
 
     if (replyText) {
+      replyText = applyReplyVariables(replyText)
       console.log(`[AMAN CHAT] Smart Auto-replying to "${incomingText}" with "${replyText}"`)
       updateContactCooldown(chatKey)
       await new Promise(res => setTimeout(res, 800))
@@ -188,6 +205,7 @@ export function checkAndAutoReply(): void {
       const analytics = await getAnalytics()
       analytics.autoRepliesTriggered += 1
       await setAnalytics(analytics)
+      await bumpDailyStat({ autoReplies: 1 })
     }
   })
 }
@@ -195,83 +213,59 @@ export function checkAndAutoReply(): void {
 export async function openPhoneChat(phone: string): Promise<void> {
   const cleanPhone = phone.replace(/[^0-9]/g, '')
 
-  // We rely strictly on DOM manipulation for opening chats seamlessly without triggering a reload
-  // (which happens if SPA router fails using the /send?phone=... link).
-
-  // Step 1: Click the "New Chat" button
-  const newChatBtn = (
-    document.querySelector('button[aria-label="New chat"]') ||
-    document.querySelector('button[aria-label="Chat baru"]') ||
-    document.querySelector('span[data-icon="chat"]')?.closest('button') ||
-    document.querySelector('span[data-icon="new-chat-outline"]')?.closest('button')
-  ) as HTMLElement | null
-
-  if (newChatBtn) {
-    newChatBtn.click()
-  } else {
-    console.error('[AMAN CHAT] Could not find "New chat" button.')
-    return
+  // 1. Native WA Web Link Element Click
+  let helperLink = document.getElementById('wku-nav-link-helper') as HTMLAnchorElement | null
+  if (!helperLink) {
+    helperLink = document.createElement('a')
+    helperLink.id = 'wku-nav-link-helper'
+    helperLink.style.display = 'none'
+    document.body.appendChild(helperLink)
   }
+  helperLink.setAttribute('href', `https://web.whatsapp.com/send?phone=${cleanPhone}`)
+  helperLink.click()
 
-  // Step 2: Wait for search input in the sidebar to appear and type the number
-  let attempts = 0
-  let searchInput: HTMLElement | null = null
+  // 2. Fallback via DOM manipulation if composer doesn't open in 1.2 seconds
+  setTimeout(async () => {
+    const composer = document.querySelector('footer div[contenteditable="true"]')
+    if (!composer) {
+      const newChatBtn = (
+        document.querySelector('button[aria-label="New chat"]') ||
+        document.querySelector('button[aria-label="Chat baru"]') ||
+        document.querySelector('span[data-icon="chat"]')?.closest('button') ||
+        document.querySelector('span[data-icon="new-chat-outline"]')?.closest('button')
+      ) as HTMLElement | null
 
-  while (attempts < 10) {
-    await new Promise(r => setTimeout(r, 200))
-    searchInput = (
-      document.querySelector('div[contenteditable="true"][data-tab="3"]') ||
-      document.querySelector('#side div[contenteditable="true"]') ||
-      document.querySelector('[data-testid="chat-list-search"]') ||
-      document.querySelector('div[contenteditable="true"]')
-    ) as HTMLElement | null
-
-    if (searchInput && searchInput.offsetParent !== null) {
-      break
-    }
-    attempts++
-  }
-
-  if (searchInput) {
-    searchInput.focus()
-    document.execCommand('selectAll', false)
-    document.execCommand('delete', false)
-    document.execCommand('insertText', false, cleanPhone)
-    searchInput.dispatchEvent(new InputEvent('input', { bubbles: true }))
-
-    // Step 3: Wait for search results and click the first valid list item
-    await new Promise(r => setTimeout(r, 800)) // delay for results to load
-    let resultClicked = false
-    attempts = 0
-
-    while (attempts < 10 && !resultClicked) {
-      await new Promise(r => setTimeout(r, 200))
-
-      const resultsContainer = document.querySelector('#pane-side') || document.querySelector('#side')
-
-      if (resultsContainer) {
-        // Find the first list item in the search results
-        const firstResult = (
-          resultsContainer.querySelector('[role="listitem"]') ||
-          resultsContainer.querySelector('[data-testid="chat-list-item"]') ||
-          resultsContainer.querySelector('[data-testid="cell-frame-container"]')
+      if (newChatBtn) {
+        newChatBtn.click()
+        await new Promise(r => setTimeout(r, 400))
+        let searchInput = (
+          document.querySelector('div[contenteditable="true"][data-tab="3"]') ||
+          document.querySelector('#side div[contenteditable="true"]') ||
+          document.querySelector('[data-testid="chat-list-search"]') ||
+          document.querySelector('div[contenteditable="true"]')
         ) as HTMLElement | null
 
-        if (firstResult) {
-          firstResult.click()
-          resultClicked = true
-          break
+        if (searchInput) {
+          searchInput.focus()
+          document.execCommand('selectAll', false)
+          document.execCommand('delete', false)
+          document.execCommand('insertText', false, cleanPhone)
+          searchInput.dispatchEvent(new InputEvent('input', { bubbles: true }))
+
+          await new Promise(r => setTimeout(r, 800))
+          const firstResult = (
+            document.querySelector('#pane-side [role="listitem"]') ||
+            document.querySelector('#side [data-testid="chat-list-item"]') ||
+            document.querySelector('[data-testid="cell-frame-container"]')
+          ) as HTMLElement | null
+
+          if (firstResult) {
+            firstResult.click()
+          }
         }
       }
-      attempts++
     }
-
-    if (!resultClicked) {
-      console.warn('[AMAN CHAT] No search result found or clickable for:', cleanPhone)
-    }
-  } else {
-    console.error('[AMAN CHAT] Could not find search input after clicking new chat.')
-  }
+  }, 1200)
 }
 
 export interface ChatReadyResult {
@@ -284,7 +278,6 @@ export function waitForChatReadyOrError(timeoutMs: number = 12000): Promise<Chat
     const startTime = Date.now()
 
     const interval = setInterval(() => {
-      // 1. Check for Invalid Number Popup Modal
       const dialog = (
         document.querySelector('div[role="dialog"]') ||
         document.querySelector('[data-testid="popup-contents"]') ||
@@ -301,8 +294,6 @@ export function waitForChatReadyOrError(timeoutMs: number = 12000): Promise<Chat
           text.includes('tautan tidak valid')
         ) {
           clearInterval(interval)
-
-          // Click OK/Dismiss button on modal
           const okBtn = (
             dialog.querySelector('button') ||
             dialog.querySelector('div[role="button"]') ||
@@ -317,7 +308,6 @@ export function waitForChatReadyOrError(timeoutMs: number = 12000): Promise<Chat
         }
       }
 
-      // 2. Check for Composer Input Box
       const input = (
         document.querySelector('footer div[contenteditable="true"]') ||
         document.querySelector('[data-testid="conversation-compose-box-input"]') ||
@@ -330,7 +320,6 @@ export function waitForChatReadyOrError(timeoutMs: number = 12000): Promise<Chat
         return
       }
 
-      // 3. Timeout check
       if (Date.now() - startTime >= timeoutMs) {
         clearInterval(interval)
         resolve({ success: false, reason: 'timeout' })
@@ -366,7 +355,6 @@ export async function sendRealMessage(text: string, typingMode: 'instant' | 'cha
   input.dispatchEvent(new InputEvent('input', { bubbles: true }))
   await new Promise(r => setTimeout(r, 300))
 
-  // Look for Send Button
   const sendBtn = (
     document.querySelector('[data-testid="compose-btn-send"]') ||
     document.querySelector('button[aria-label="Kirim"]') ||
@@ -378,7 +366,6 @@ export async function sendRealMessage(text: string, typingMode: 'instant' | 'cha
     sendBtn.click()
     return true
   } else {
-    // Fallback: Dispatch Enter Key
     const enterEvent = new KeyboardEvent('keydown', {
       key: 'Enter',
       code: 'Enter',
@@ -395,45 +382,104 @@ export async function sendRealMessage(text: string, typingMode: 'instant' | 'cha
 let isBroadcastRunning = false
 let isBroadcastPaused = false
 
+export function isBroadcastActuallyRunning(): boolean {
+  return isBroadcastRunning
+}
+
+export interface BroadcastProgress {
+  index: number
+  total: number
+  log: string
+  done?: boolean
+  failedNumbers?: string[]
+}
+
+export interface BroadcastRunOptions {
+  numbers: string[]
+  message1: string
+  message2?: string
+  useTwoMessages: boolean
+  minInterval: number
+  maxInterval: number
+  typingMode: 'instant' | 'character'
+  maxRetries?: number
+  batchCooldownEvery?: number
+  batchCooldownSeconds?: number
+  useBatching?: boolean
+  batchSize?: number
+  batchDelayMinutes?: number
+  enableSpintax?: boolean
+  startIndex?: number
+  onProgress: (status: BroadcastProgress) => void
+}
+
 export async function runRealBroadcast(
-  numbers: string[],
-  message1: string,
-  message2: string | undefined,
-  useTwoMessages: boolean,
-  minInterval: number,
-  maxInterval: number,
-  typingMode: 'instant' | 'character',
-  onProgress: (status: { index: number; total: number; log: string; done?: boolean }) => void,
-  options?: {
+  optionsOrNumbers: BroadcastRunOptions | string[],
+  message1?: string,
+  message2?: string,
+  useTwoMessages?: boolean,
+  minInterval?: number,
+  maxInterval?: number,
+  typingMode?: 'instant' | 'character',
+  onProgressCb?: (status: BroadcastProgress) => void,
+  extraOptions?: {
     useBatching?: boolean
     batchSize?: number
     batchDelayMinutes?: number
     enableSpintax?: boolean
   }
 ): Promise<void> {
+  let opts: BroadcastRunOptions
+
+  if (Array.isArray(optionsOrNumbers)) {
+    opts = {
+      numbers: optionsOrNumbers,
+      message1: message1 || '',
+      message2,
+      useTwoMessages: !!useTwoMessages,
+      minInterval: minInterval || 3,
+      maxInterval: maxInterval || 7,
+      typingMode: typingMode || 'instant',
+      useBatching: extraOptions?.useBatching,
+      batchSize: extraOptions?.batchSize,
+      batchDelayMinutes: extraOptions?.batchDelayMinutes,
+      enableSpintax: extraOptions?.enableSpintax ?? true,
+      onProgress: onProgressCb || (() => {})
+    }
+  } else {
+    opts = optionsOrNumbers
+  }
+
+  const {
+    numbers, message1: msg1, message2: msg2, useTwoMessages: useTwo,
+    minInterval: minInt, maxInterval: maxInt, typingMode: mode,
+    maxRetries = 1, batchCooldownEvery = 0, batchCooldownSeconds = 30,
+    useBatching = false, batchSize = 10, batchDelayMinutes = 2,
+    enableSpintax = true, onProgress
+  } = opts
+
+  const startIndex = opts.startIndex || 0
+
   isBroadcastRunning = true
   isBroadcastPaused = false
 
-  const useBatching = options?.useBatching ?? false
-  const batchSize = options?.batchSize ?? 10
-  const batchDelayMinutes = options?.batchDelayMinutes ?? 2
-  const enableSpintax = options?.enableSpintax ?? true
-
-  onProgress({
-    index: 0,
-    total: numbers.length,
-    log: `[${formatTimestamp()}] --- Memulai Broadcast Real WhatsApp (${numbers.length} penerima) ---`
-  })
-
+  const failedNumbers: string[] = []
   let successCount = 0
   let failedCount = 0
 
-  for (let i = 0; i < numbers.length; i++) {
+  onProgress({
+    index: startIndex,
+    total: numbers.length,
+    log: `[${formatTimestamp()}] --- ${startIndex > 0 ? 'Melanjutkan' : 'Memulai'} Broadcast Real WhatsApp (${numbers.length} penerima) ---`
+  })
+
+  for (let i = startIndex; i < numbers.length; i++) {
     if (!isBroadcastRunning) {
       onProgress({
         index: i,
         total: numbers.length,
-        log: `[${formatTimestamp()}] Broadcast Di-hentikan oleh pengguna.`
+        log: `[${formatTimestamp()}] Broadcast Di-hentikan oleh pengguna.`,
+        failedNumbers
       })
       return
     }
@@ -444,62 +490,75 @@ export async function runRealBroadcast(
     }
 
     const targetPhone = numbers[i]
-    let currentMsg = useTwoMessages && i % 2 === 1 && message2 ? message2 : message1
+    let currentMsg = useTwo && i % 2 === 1 && msg2 ? msg2 : msg1
     if (enableSpintax) {
       currentMsg = parseSpintax(currentMsg)
     }
 
-    onProgress({
-      index: i,
-      total: numbers.length,
-      log: `[${formatTimestamp()}] Opening chat untuk ${targetPhone}...`
-    })
+    let attempt = 0
+    let delivered = false
+    let lastFailReason = ''
 
-    await openPhoneChat(targetPhone)
-    let readyResult = await waitForChatReadyOrError(12000)
+    while (attempt <= maxRetries && !delivered) {
+      if (attempt > 0) {
+        onProgress({
+          index: i,
+          total: numbers.length,
+          log: `[${formatTimestamp()}] 🔁 Mencoba ulang ${targetPhone} (percobaan ${attempt + 1}/${maxRetries + 1})...`
+        })
+        await new Promise(r => setTimeout(r, 1500))
+      } else {
+        onProgress({
+          index: i,
+          total: numbers.length,
+          log: `[${formatTimestamp()}] Opening chat untuk ${targetPhone}...`
+        })
+      }
 
-    // 1x Automatic Retry on Timeout
-    if (!readyResult.success && readyResult.reason === 'timeout') {
-      onProgress({
-        index: i,
-        total: numbers.length,
-        log: `[${formatTimestamp()}] 🔄 Timeout pada ${targetPhone}, mencoba ulang (Retry 1/1)...`
-      })
-      await new Promise(r => setTimeout(r, 1000))
       await openPhoneChat(targetPhone)
-      readyResult = await waitForChatReadyOrError(10000)
-    }
+      const readyResult = await waitForChatReadyOrError(12000)
 
-    if (!readyResult.success) {
-      failedCount++
-      const reasonText = readyResult.reason === 'invalid_number' ? 'Nomor tidak terdaftar di WA' : 'Timeout membuka chat'
-      onProgress({
-        index: i + 1,
-        total: numbers.length,
-        log: `[${formatTimestamp()}] ❌ ${targetPhone}: ${reasonText}`
-      })
-    } else {
+      if (!readyResult.success) {
+        if (readyResult.reason === 'invalid_number') {
+          lastFailReason = 'Nomor tidak terdaftar di WA'
+          break
+        }
+        lastFailReason = 'Timeout membuka chat'
+        attempt++
+        continue
+      }
+
       await new Promise(r => setTimeout(r, 500))
-      const sent = await sendRealMessage(currentMsg, typingMode)
+      const sent = await sendRealMessage(currentMsg, mode)
 
       if (sent) {
-        successCount++
-        onProgress({
-          index: i + 1,
-          total: numbers.length,
-          log: `[${formatTimestamp()}] ✅ Kirim ke ${targetPhone} BERHASIL!`
-        })
+        delivered = true
       } else {
-        failedCount++
-        onProgress({
-          index: i + 1,
-          total: numbers.length,
-          log: `[${formatTimestamp()}] ❌ Kirim ke ${targetPhone} GAGAL (Button Kirim Tidak Ditemukan)`
-        })
+        lastFailReason = 'Button Kirim tidak ditemukan'
+        attempt++
       }
     }
 
-    // Check Batching Pause
+    if (delivered) {
+      successCount++
+      onProgress({
+        index: i + 1,
+        total: numbers.length,
+        log: `[${formatTimestamp()}] ✅ Kirim ke ${targetPhone} BERHASIL!`
+      })
+      await bumpDailyStat({ sent: 1, success: 1 })
+    } else {
+      failedCount++
+      failedNumbers.push(targetPhone)
+      onProgress({
+        index: i + 1,
+        total: numbers.length,
+        log: `[${formatTimestamp()}] ❌ ${targetPhone}: ${lastFailReason}`,
+        failedNumbers: [...failedNumbers]
+      })
+      await bumpDailyStat({ sent: 1, failed: 1 })
+    }
+
     if (useBatching && (i + 1) % batchSize === 0 && i < numbers.length - 1) {
       onProgress({
         index: i + 1,
@@ -508,9 +567,9 @@ export async function runRealBroadcast(
       })
 
       const totalBatchWaitMs = batchDelayMinutes * 60 * 1000
-      const startTime = Date.now()
+      const batchStartTime = Date.now()
 
-      while (Date.now() - startTime < totalBatchWaitMs) {
+      while (Date.now() - batchStartTime < totalBatchWaitMs) {
         if (!isBroadcastRunning) return
         while (isBroadcastPaused) {
           await new Promise(r => setTimeout(r, 1000))
@@ -519,22 +578,30 @@ export async function runRealBroadcast(
         await new Promise(r => setTimeout(r, 1000))
       }
     } else if (i < numbers.length - 1) {
-      // Normal Delay before next number
-      const delaySec = Math.floor(Math.random() * (maxInterval - minInterval + 1)) + minInterval
-      onProgress({
-        index: i + 1,
-        total: numbers.length,
-        log: `[${formatTimestamp()}] Menunggu jeda acak ${delaySec} detik...`
-      })
-      await new Promise(r => setTimeout(r, delaySec * 1000))
+      const sentSoFar = i - startIndex + 1
+      if (batchCooldownEvery > 0 && sentSoFar % batchCooldownEvery === 0) {
+        onProgress({
+          index: i + 1,
+          total: numbers.length,
+          log: `[${formatTimestamp()}] ⏸ Jeda tambahan ${batchCooldownSeconds} detik setelah ${batchCooldownEvery} pesan (mengurangi risiko diblokir)...`
+        })
+        await new Promise(r => setTimeout(r, batchCooldownSeconds * 1000))
+      } else {
+        const delaySec = Math.floor(Math.random() * (maxInt - minInt + 1)) + minInt
+        onProgress({
+          index: i + 1,
+          total: numbers.length,
+          log: `[${formatTimestamp()}] Menunggu jeda acak ${delaySec} detik...`
+        })
+        await new Promise(r => setTimeout(r, delaySec * 1000))
+      }
     }
   }
 
   isBroadcastRunning = false
 
-  // Update real analytics
   const analytics = await getAnalytics()
-  analytics.totalSent += numbers.length
+  analytics.totalSent += (numbers.length - startIndex)
   analytics.totalSuccess += successCount
   analytics.totalFailed += failedCount
   analytics.campaignsCount += 1
@@ -544,7 +611,8 @@ export async function runRealBroadcast(
     index: numbers.length,
     total: numbers.length,
     log: `[${formatTimestamp()}] 🎉 Kampanye Broadcast Selesai! (Sukses: ${successCount}, Gagal: ${failedCount})`,
-    done: true
+    done: true,
+    failedNumbers
   })
 }
 
@@ -564,16 +632,14 @@ export function stopRealBroadcast(): void {
 const debouncedCheck = debounce(() => checkAndAutoReply(), 400)
 
 export function initAutoReplyObserver(): void {
-  // 1. DOM Mutation Observer (debounced so rapid bursts of WhatsApp's own
-  //    DOM churn only trigger one check instead of dozens).
   const observer = new MutationObserver(() => {
     debouncedCheck()
   })
 
   observer.observe(document.body, { childList: true, subtree: true })
 
-  // 2. Low-frequency safety-net poll, in case a relevant mutation is missed
   setInterval(() => {
     checkAndAutoReply()
   }, 5000)
 }
+
