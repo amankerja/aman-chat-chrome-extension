@@ -1,4 +1,4 @@
-import { getAutoReplyEnabled, getAutoReplyMode, getAutoReplyRules, setAnalytics, getAnalytics } from './storage'
+import { getAutoReplyEnabled, getAutoReplyMode, getAutoReplyRules, setAnalytics, getAnalytics, isExtensionValid } from './storage'
 import { formatTimestamp } from './helpers'
 
 export async function openPhoneChat(phone: string): Promise<void> {
@@ -313,6 +313,8 @@ export function stopRealBroadcast(): void {
 const processedMsgIds = new Set<string>()
 
 export function checkAndAutoReply(): void {
+  if (!isExtensionValid()) return
+
   getAutoReplyEnabled().then(async (enabled) => {
     if (!enabled) return
 

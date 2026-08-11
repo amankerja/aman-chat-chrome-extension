@@ -47,17 +47,47 @@ const DEFAULT_ANALYTICS: Analytics = {
   campaignsCount: 0
 }
 
+export function isExtensionValid(): boolean {
+  try {
+    return typeof chrome !== 'undefined' && !!chrome.runtime && !!chrome.runtime.id
+  } catch {
+    return false
+  }
+}
+
 function getStorage<T>(key: string, defaultValue: T): Promise<T> {
   return new Promise((resolve) => {
-    chrome.storage.local.get([key], (result: Record<string, T>) => {
-      resolve(result[key] !== undefined ? result[key] : defaultValue)
-    })
+    if (!isExtensionValid() || !chrome.storage?.local) {
+      resolve(defaultValue)
+      return
+    }
+    try {
+      chrome.storage.local.get([key], (result: Record<string, T>) => {
+        if (chrome.runtime?.lastError) {
+          resolve(defaultValue)
+        } else {
+          resolve(result && result[key] !== undefined ? result[key] : defaultValue)
+        }
+      })
+    } catch {
+      resolve(defaultValue)
+    }
   })
 }
 
 function setStorage<T>(key: string, value: T): Promise<void> {
   return new Promise((resolve) => {
-    chrome.storage.local.set({ [key]: value }, resolve)
+    if (!isExtensionValid() || !chrome.storage?.local) {
+      resolve()
+      return
+    }
+    try {
+      chrome.storage.local.set({ [key]: value }, () => {
+        resolve()
+      })
+    } catch {
+      resolve()
+    }
   })
 }
 
