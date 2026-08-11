@@ -4,59 +4,67 @@ import { formatTimestamp } from './helpers'
 export async function openPhoneChat(phone: string): Promise<void> {
   const cleanPhone = phone.replace(/[^0-9]/g, '')
 
-  // 1. Locate WhatsApp Web search input box in the left sidebar
-  let searchInput = (
-    document.querySelector('#side div[contenteditable="true"]') ||
-    document.querySelector('[data-testid="chat-list-search"]') ||
-    document.querySelector('#side input[type="text"]')
-  ) as HTMLElement | null
+  // 1. Native WA Web Link Element Click (Interacted natively by WhatsApp Web React Router without page reload)
+  let helperLink = document.getElementById('wku-nav-link-helper') as HTMLAnchorElement | null
+  if (!helperLink) {
+    helperLink = document.createElement('a')
+    helperLink.id = 'wku-nav-link-helper'
+    helperLink.style.display = 'none'
+    document.body.appendChild(helperLink)
+  }
 
-  // If search box is not directly visible, click "New Chat" icon button in the header
-  if (!searchInput) {
-    const newChatBtn = (
-      document.querySelector('span[data-icon="chat"]')?.closest('button') ||
-      document.querySelector('span[data-icon="new-chat-outline"]')?.closest('button') ||
-      document.querySelector('button[aria-label="New chat"]') ||
-      document.querySelector('button[aria-label="Chat baru"]')
-    ) as HTMLElement | null
+  helperLink.setAttribute('href', `https://web.whatsapp.com/send?phone=${cleanPhone}`)
+  helperLink.click()
 
-    if (newChatBtn) {
-      newChatBtn.click()
-      await new Promise(r => setTimeout(r, 400))
-      searchInput = (
-        document.querySelector('div[contenteditable="true"][data-tab="3"]') ||
+  // 2. Fallback: Search phone number in left sidebar if composer doesn't open within 1.2 seconds
+  setTimeout(async () => {
+    const composer = document.querySelector('footer div[contenteditable="true"]')
+    if (!composer) {
+      let searchInput = (
         document.querySelector('#side div[contenteditable="true"]') ||
-        document.querySelector('div[contenteditable="true"]')
+        document.querySelector('[data-testid="chat-list-search"]') ||
+        document.querySelector('#side input[type="text"]')
       ) as HTMLElement | null
+
+      if (!searchInput) {
+        const newChatBtn = (
+          document.querySelector('span[data-icon="chat"]')?.closest('button') ||
+          document.querySelector('span[data-icon="new-chat-outline"]')?.closest('button') ||
+          document.querySelector('button[aria-label="New chat"]') ||
+          document.querySelector('button[aria-label="Chat baru"]')
+        ) as HTMLElement | null
+
+        if (newChatBtn) {
+          newChatBtn.click()
+          await new Promise(r => setTimeout(r, 400))
+          searchInput = (
+            document.querySelector('div[contenteditable="true"][data-tab="3"]') ||
+            document.querySelector('#side div[contenteditable="true"]') ||
+            document.querySelector('div[contenteditable="true"]')
+          ) as HTMLElement | null
+        }
+      }
+
+      if (searchInput) {
+        searchInput.focus()
+        document.execCommand('selectAll', false)
+        document.execCommand('delete', false)
+        document.execCommand('insertText', false, cleanPhone)
+        searchInput.dispatchEvent(new InputEvent('input', { bubbles: true }))
+
+        await new Promise(r => setTimeout(r, 800))
+        const firstResult = (
+          document.querySelector('#pane-side [role="listitem"]') ||
+          document.querySelector('#side [data-testid="chat-list-item"]') ||
+          document.querySelector('[data-testid="cell-frame-container"]')
+        ) as HTMLElement | null
+
+        if (firstResult) {
+          firstResult.click()
+        }
+      }
     }
-  }
-
-  if (searchInput) {
-    searchInput.focus()
-
-    // Clear previous search query
-    document.execCommand('selectAll', false)
-    document.execCommand('delete', false)
-
-    // Type the target phone number directly into search input
-    document.execCommand('insertText', false, cleanPhone)
-    searchInput.dispatchEvent(new InputEvent('input', { bubbles: true }))
-
-    // Wait for WhatsApp Web search results to populate
-    await new Promise(r => setTimeout(r, 900))
-
-    // Click the top search result item in the search list
-    const firstResult = (
-      document.querySelector('#pane-side [role="listitem"]') ||
-      document.querySelector('#side [data-testid="chat-list-item"]') ||
-      document.querySelector('[data-testid="cell-frame-container"]')
-    ) as HTMLElement | null
-
-    if (firstResult) {
-      firstResult.click()
-      await new Promise(r => setTimeout(r, 400))
-    }
-  }
+  }, 1200)
 }
 
 export interface ChatReadyResult {
@@ -64,26 +72,38 @@ export interface ChatReadyResult {
   reason?: 'invalid_number' | 'timeout'
 }
 
-export function waitForChatReadyOrError(timeoutMs: number = 10000): Promise<ChatReadyResult> {
+export function waitForChatReadyOrError(timeoutMs: number = 12000): Promise<ChatReadyResult> {
   return new Promise((resolve) => {
     const startTime = Date.now()
 
     const interval = setInterval(() => {
       // 1. Check for Invalid Number Popup Modal
-      const dialog = document.querySelector('div[role="dialog"]') || document.querySelector('[data-testid="popup-contents"]')
+      const dialog = (
+        document.querySelector('div[role="dialog"]') ||
+        document.querySelector('[data-testid="popup-contents"]') ||
+        document.querySelector('div[data-animate-modal-body]')
+      )
+
       if (dialog) {
-        const text = dialog.textContent || ''
+        const text = (dialog.textContent || '').toLowerCase()
         if (
           text.includes('tidak valid') ||
           text.includes('invalid') ||
           text.includes('tidak terdaftar') ||
-          text.includes('not on WhatsApp')
+          text.includes('not on whatsapp') ||
+          text.includes('tautan tidak valid')
         ) {
           clearInterval(interval)
 
           // Click OK/Dismiss button on modal
-          const okBtn = dialog.querySelector('button') || dialog.querySelector('div[role="button"]')
-          if (okBtn) (okBtn as HTMLElement).click()
+          const okBtn = (
+            dialog.querySelector('button') ||
+            dialog.querySelector('div[role="button"]') ||
+            document.querySelector('button[aria-label="OK"]') ||
+            document.querySelector('div[data-testid="popup-controls"] button')
+          ) as HTMLElement | null
+
+          if (okBtn) okBtn.click()
 
           resolve({ success: false, reason: 'invalid_number' })
           return
@@ -91,11 +111,13 @@ export function waitForChatReadyOrError(timeoutMs: number = 10000): Promise<Chat
       }
 
       // 2. Check for Composer Input Box
-      const input = document.querySelector('footer div[contenteditable="true"]') ||
-                    document.querySelector('[data-testid="conversation-compose-box-input"]') ||
-                    document.querySelector('div[contenteditable="true"][data-tab="10"]')
+      const input = (
+        document.querySelector('footer div[contenteditable="true"]') ||
+        document.querySelector('[data-testid="conversation-compose-box-input"]') ||
+        document.querySelector('div[contenteditable="true"][data-tab="10"]')
+      ) as HTMLElement | null
 
-      if (input && (input as HTMLElement).offsetParent !== null) {
+      if (input && input.offsetParent !== null) {
         clearInterval(interval)
         resolve({ success: true })
         return
@@ -106,7 +128,7 @@ export function waitForChatReadyOrError(timeoutMs: number = 10000): Promise<Chat
         clearInterval(interval)
         resolve({ success: false, reason: 'timeout' })
       }
-    }, 400)
+    }, 350)
   })
 }
 
