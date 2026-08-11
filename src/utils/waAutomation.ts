@@ -280,53 +280,80 @@ export function stopRealBroadcast(): void {
   isBroadcastPaused = false
 }
 
-// Auto Reply Observer
-export function initAutoReplyObserver(): void {
-  const observer = new MutationObserver(async (mutations) => {
-    const enabled = await getAutoReplyEnabled()
+// Auto Reply Engine
+const processedMsgIds = new Set<string>()
+
+export function checkAndAutoReply(): void {
+  getAutoReplyEnabled().then(async (enabled) => {
     if (!enabled) return
 
-    for (const mutation of mutations) {
-      for (const node of Array.from(mutation.addedNodes)) {
-        if (!(node instanceof HTMLElement)) continue
+    // Find all incoming message elements in active chat room
+    const incomingNodes = document.querySelectorAll('div.message-in, [class*="message-in"], div[data-id^="false_"]')
+    if (incomingNodes.length === 0) return
 
-        const isIncomingMsg = node.matches('[class*="message-in"]') || node.querySelector('[class*="message-in"]')
-        if (isIncomingMsg) {
-          const textEl = node.querySelector('.selectable-text') || node.querySelector('[dir="ltr"]')
-          if (!textEl || !textEl.textContent) continue
+    const rules = await getAutoReplyRules()
+    if (rules.length === 0) return
+    const mode = await getAutoReplyMode()
 
-          const incomingText = textEl.textContent.trim().toLowerCase()
-          const mode = await getAutoReplyMode()
-          const rules = await getAutoReplyRules()
+    // Get the last incoming message element
+    const lastMsgNode = incomingNodes[incomingNodes.length - 1] as HTMLElement
 
-          let replyText = ''
+    // Generate or read unique message ID
+    const msgId = lastMsgNode.getAttribute('data-id') ||
+                  lastMsgNode.getAttribute('data-message-id') ||
+                  (lastMsgNode.textContent || '').slice(-50)
 
-          if (mode === 'all') {
-            replyText = rules[0]?.reply || 'Halo! Pesan Anda telah kami terima.'
-          } else {
-            for (const r of rules) {
-              if (!r.active) continue
-              const keywords = r.keywords.split(',').map(k => k.trim().toLowerCase())
-              if (keywords.some(k => k && incomingText.includes(k))) {
-                replyText = r.reply
-                break
-              }
-            }
-          }
+    if (processedMsgIds.has(msgId)) return
 
-          if (replyText) {
-            console.log('[AMAN CHAT] Auto replying to:', incomingText, '->', replyText)
-            await new Promise(res => setTimeout(res, 1000))
-            await sendRealMessage(replyText, 'instant')
+    // Mark as processed so we don't reply multiple times
+    processedMsgIds.add(msgId)
 
-            const analytics = await getAnalytics()
-            analytics.autoRepliesTriggered += 1
-            await setAnalytics(analytics)
-          }
+    // Extract text content
+    const textEl = lastMsgNode.querySelector('.selectable-text') ||
+                   lastMsgNode.querySelector('.copyable-text') ||
+                   lastMsgNode.querySelector('span[dir="ltr"]') ||
+                   lastMsgNode.querySelector('span[dir="rtl"]')
+
+    if (!textEl || !textEl.textContent) return
+    const incomingText = textEl.textContent.trim().toLowerCase()
+
+    let replyText = ''
+
+    if (mode === 'all') {
+      replyText = rules[0]?.reply || 'Halo! Pesan Anda telah kami terima.'
+    } else {
+      for (const r of rules) {
+        if (!r.active) continue
+        const keywords = r.keywords.split(',').map(k => k.trim().toLowerCase())
+        if (keywords.some(k => k && incomingText.includes(k))) {
+          replyText = r.reply
+          break
         }
       }
     }
+
+    if (replyText) {
+      console.log(`[AMAN CHAT] Auto-replying to "${incomingText}" with "${replyText}"`)
+      await new Promise(res => setTimeout(res, 800))
+      await sendRealMessage(replyText, 'instant')
+
+      const analytics = await getAnalytics()
+      analytics.autoRepliesTriggered += 1
+      await setAnalytics(analytics)
+    }
+  })
+}
+
+export function initAutoReplyObserver(): void {
+  // 1. DOM Mutation Observer
+  const observer = new MutationObserver(() => {
+    checkAndAutoReply()
   })
 
   observer.observe(document.body, { childList: true, subtree: true })
+
+  // 2. Interval Fallback Scanner (runs every 1.5s)
+  setInterval(() => {
+    checkAndAutoReply()
+  }, 1500)
 }
