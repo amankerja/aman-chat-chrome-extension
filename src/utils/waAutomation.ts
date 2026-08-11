@@ -3,22 +3,53 @@ import { formatTimestamp } from './helpers'
 
 export async function openPhoneChat(phone: string): Promise<void> {
   const cleanPhone = phone.replace(/[^0-9]/g, '')
-  const currentUrl = window.location.href
 
-  // Create an anchor link to trigger WhatsApp Web internal SPA router
+  // 1. Dispatch click event on anchor element to trigger WhatsApp Web SPA route
   const link = document.createElement('a')
   link.href = `https://web.whatsapp.com/send?phone=${cleanPhone}`
-  link.style.display = 'none'
+  link.setAttribute('target', '_self')
   document.body.appendChild(link)
-  link.click()
+
+  const clickEvent = new MouseEvent('click', {
+    bubbles: true,
+    cancelable: true,
+    view: window
+  })
+  link.dispatchEvent(clickEvent)
   link.remove()
 
-  // Fallback if URL doesn't update within 500ms
-  setTimeout(() => {
-    if (!window.location.href.includes(cleanPhone)) {
-      window.location.href = `https://web.whatsapp.com/send?phone=${cleanPhone}`
+  // 2. Trigger SPA pushState & popstate event without browser tab reload
+  if (!window.location.href.includes(cleanPhone)) {
+    window.history.pushState({}, '', `/send?phone=${cleanPhone}`)
+    window.dispatchEvent(new Event('popstate'))
+  }
+
+  // 3. Fallback: Search number in WhatsApp Web search bar if composer is not open
+  setTimeout(async () => {
+    const composer = document.querySelector('footer div[contenteditable="true"]')
+    if (!composer) {
+      const searchBox = (
+        document.querySelector('#side div[contenteditable="true"]') ||
+        document.querySelector('[data-testid="chat-list-search"]') ||
+        document.querySelector('#side input')
+      ) as HTMLElement | null
+
+      if (searchBox) {
+        searchBox.focus()
+        document.execCommand('selectAll', false)
+        document.execCommand('delete', false)
+        document.execCommand('insertText', false, cleanPhone)
+        searchBox.dispatchEvent(new InputEvent('input', { bubbles: true }))
+
+        await new Promise(r => setTimeout(r, 800))
+        const firstResult = (
+          document.querySelector('#pane-side [role="listitem"]') ||
+          document.querySelector('[data-testid="chat-list-item"]')
+        ) as HTMLElement | null
+        if (firstResult) firstResult.click()
+      }
     }
-  }, 500)
+  }, 400)
 }
 
 export interface ChatReadyResult {
