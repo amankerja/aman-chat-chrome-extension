@@ -1,0 +1,15 @@
+========================================================
+   CARA INSTALASI EKSTENSI AMAN CHAT v3.0 PRO (1 MENIT)
+========================================================
+
+1. Klik 2x file "INSTALL_AMAN_CHAT.bat".
+2. Google Chrome akan otomatis terbuka ke halaman Extensions.
+3. Di pojok kanan atas Chrome, aktifkan sakelar "Mode pengembang" (Developer Mode).
+4. Di pojok kiri atas, klik tombol "Muat tanpa paket" (Load unpacked).
+5. Pada kotak alamat folder, tekan tombol keyboard ( Ctrl + V ), lalu tekan Enter / Pilih Folder.
+6. Buka https://web.whatsapp.com. Ekstensi AMAN CHAT siap digunakan!
+
+========================================================
+   BUTUH BANTUAN / LISENSI?
+========================================================
+Hubungi Layanan Customer Support kami untuk bantuan aktivasi.
