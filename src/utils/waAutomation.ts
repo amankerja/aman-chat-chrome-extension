@@ -211,9 +211,34 @@ export function checkAndAutoReply(): void {
   })
 }
 
+function isInstallerOrDownloadElement(el: HTMLElement): boolean {
+  if (!el) return false
+  const text = (el.textContent || '').toLowerCase()
+  if (
+    text.includes('whatsapp for windows') ||
+    text.includes('chat history on the app') ||
+    text.includes('get whatsapp') ||
+    text.includes('dapatkan whatsapp') ||
+    text.includes('download whatsapp') ||
+    text.includes('unduh whatsapp') ||
+    text.includes('whatsapp_installer') ||
+    text.includes('installer.exe')
+  ) {
+    return true
+  }
+
+  const href = el.getAttribute('href') || el.querySelector('a')?.getAttribute('href') || ''
+  if (href.toLowerCase().includes('download') || href.toLowerCase().includes('installer')) {
+    return true
+  }
+
+  return false
+}
+
 function isElementVisible(el: HTMLElement): boolean {
   if (!el) return false
   if (el.id === 'aman-chat-sidebar' || el.closest('#aman-chat-sidebar')) return false
+  if (isInstallerOrDownloadElement(el) || el.closest('a[href*="download"]')) return false
   const style = window.getComputedStyle(el)
   if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false
   const rect = el.getBoundingClientRect()
@@ -461,7 +486,16 @@ export async function openPhoneChat(phone: string): Promise<void> {
     )) as HTMLElement[]
 
     for (const item of searchResults) {
-      if (isElementVisible(item)) {
+      if (isElementVisible(item) && !isInstallerOrDownloadElement(item) && !item.closest('#main')) {
+        const itemText = (item.textContent || '').toLowerCase()
+        if (
+          itemText.includes('whatsapp for windows') ||
+          itemText.includes('get whatsapp') ||
+          itemText.includes('download whatsapp') ||
+          itemText.includes('chat history on the app')
+        ) {
+          continue
+        }
         item.click()
         resultClicked = true
         console.log(`[AMAN CHAT] Clicked contact search result for ${cleanPhone}`)
@@ -476,17 +510,19 @@ export async function openPhoneChat(phone: string): Promise<void> {
     if (drawerOrSide) {
       const candidates = Array.from(drawerOrSide.querySelectorAll('div[role="button"], [role="listitem"], span[title]')) as HTMLElement[]
       const match = candidates.find(el => {
-        if (!isElementVisible(el)) return false
+        if (!isElementVisible(el) || isInstallerOrDownloadElement(el) || el.closest('#main')) return false
         const t = (el.textContent || '').replace(/[^0-9]/g, '')
         return t.includes(cleanPhone) || (cleanPhone.length >= 7 && t.includes(cleanPhone.slice(-7)))
       })
 
       if (match) {
         const clickTarget = match.closest('div[role="button"]') || match.closest('[role="listitem"]') || match
-        ;(clickTarget as HTMLElement).click()
-        resultClicked = true
-        console.log(`[AMAN CHAT] Clicked matched text result for ${cleanPhone}`)
-        break
+        if (clickTarget && !isInstallerOrDownloadElement(clickTarget as HTMLElement)) {
+          ;(clickTarget as HTMLElement).click()
+          resultClicked = true
+          console.log(`[AMAN CHAT] Clicked matched text result for ${cleanPhone}`)
+          break
+        }
       }
     }
   }
