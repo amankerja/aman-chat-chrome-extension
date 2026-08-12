@@ -910,11 +910,11 @@ export async function runRealBroadcast(
       currentMsg = parseSpintax(currentMsg)
     }
 
-    // Dynamic variable replacement: {nama}, {name}, {email}, {nomor}, {phone}
+    // Dynamic variable replacement: supports {nama}, [nama], {name}, [name], {email}, [email], {nomor}, [nomor], {phone}, [phone]
     currentMsg = currentMsg
-      .replace(/\{nama\}|\{name\}/gi, recipientName || '')
-      .replace(/\{email\}/gi, recipientEmail || '')
-      .replace(/\{nomor\}|\{phone\}/gi, targetPhone || '')
+      .replace(/\{nama\}|\[nama\]|\{name\}|\[name\]/gi, recipientName || '')
+      .replace(/\{email\}|\[email\]/gi, recipientEmail || '')
+      .replace(/\{nomor\}|\[nomor\]|\{phone\}|\[phone\]/gi, targetPhone || '')
       .replace(/  +/g, ' ')
 
     let attempt = 0
