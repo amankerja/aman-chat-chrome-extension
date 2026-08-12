@@ -466,69 +466,53 @@ export async function openPhoneChat(phone: string): Promise<void> {
 
   // Step 3: Type phone number into search input
   await typeIntoSearchInput(searchInput, cleanPhone)
+  await new Promise(r => setTimeout(r, 400))
 
-  // Step 4: Wait for search result list item to appear and click it
+  // Step 4: Wait for search result list item that STRICTLY MATCHES cleanPhone and click it
   let resultClicked = false
+  const targetSuffix = cleanPhone.length >= 7 ? cleanPhone.slice(-7) : cleanPhone
+
   for (let attempt = 0; attempt < 25; attempt++) {
     await new Promise(r => setTimeout(r, 150))
     dismissReloadCallsModal()
 
-    const searchResults = Array.from(document.querySelectorAll(
-      '#pane-side [role="listitem"], ' +
-      '#side [role="listitem"], ' +
-      'div[data-animate-drawer-title="true"] [role="listitem"], ' +
-      '[data-testid="chat-list-item"], ' +
-      '[data-testid="cell-frame-container"], ' +
-      'div[role="button"][data-testid^="cell-frame"], ' +
-      'div[data-animate-drawer-title="true"] div[role="button"], ' +
-      '#pane-side div[role="button"][tabindex="0"], ' +
-      '#side div[role="button"][tabindex="0"]'
-    )) as HTMLElement[]
+    const searchContainer = (
+      document.querySelector('div[data-animate-drawer-title="true"]') ||
+      document.querySelector('div[data-testid="drawer-left"]') ||
+      document.querySelector('div[data-testid="chat-list-search"]') ||
+      document.querySelector('#pane-side') ||
+      document.querySelector('#side')
+    )
 
-    for (const item of searchResults) {
-      if (isElementVisible(item) && !isInstallerOrDownloadElement(item) && !item.closest('#main')) {
-        const itemText = (item.textContent || '').toLowerCase()
-        if (
-          itemText.includes('whatsapp for windows') ||
-          itemText.includes('get whatsapp') ||
-          itemText.includes('download whatsapp') ||
-          itemText.includes('chat history on the app')
-        ) {
-          continue
-        }
-        item.click()
-        resultClicked = true
-        console.log(`[AMAN CHAT] Clicked contact search result for ${cleanPhone}`)
-        break
-      }
-    }
+    if (searchContainer) {
+      const candidateElements = Array.from(searchContainer.querySelectorAll(
+        '[role="listitem"], ' +
+        '[data-testid="chat-list-item"], ' +
+        '[data-testid="cell-frame-container"], ' +
+        'div[role="button"][data-testid^="cell-frame"], ' +
+        'div[role="button"][tabindex="0"]'
+      )) as HTMLElement[]
 
-    if (resultClicked) break
+      for (const el of candidateElements) {
+        if (!isElementVisible(el) || isInstallerOrDownloadElement(el) || el.closest('#main')) continue
 
-    // Fallback: look for any element containing the cleanPhone digits
-    const drawerOrSide = document.querySelector('div[data-animate-drawer-title="true"]') || document.querySelector('#pane-side') || document.querySelector('#side')
-    if (drawerOrSide) {
-      const candidates = Array.from(drawerOrSide.querySelectorAll('div[role="button"], [role="listitem"], span[title]')) as HTMLElement[]
-      const match = candidates.find(el => {
-        if (!isElementVisible(el) || isInstallerOrDownloadElement(el) || el.closest('#main')) return false
-        const t = (el.textContent || '').replace(/[^0-9]/g, '')
-        return t.includes(cleanPhone) || (cleanPhone.length >= 7 && t.includes(cleanPhone.slice(-7)))
-      })
-
-      if (match) {
-        const clickTarget = match.closest('div[role="button"]') || match.closest('[role="listitem"]') || match
-        if (clickTarget && !isInstallerOrDownloadElement(clickTarget as HTMLElement)) {
+        const itemText = (el.textContent || '').replace(/[^0-9]/g, '')
+        // STRICT MATCH: Item MUST contain the full cleanPhone or last 7 digits of cleanPhone!
+        if (itemText.includes(cleanPhone) || itemText.includes(targetSuffix)) {
+          const clickTarget = el.closest('div[role="button"]') || el.closest('[role="listitem"]') || el
           ;(clickTarget as HTMLElement).click()
           resultClicked = true
-          console.log(`[AMAN CHAT] Clicked matched text result for ${cleanPhone}`)
+          console.log(`[AMAN CHAT] Clicked strictly matched contact search result for ${cleanPhone}`)
           break
         }
       }
     }
+
+    if (resultClicked) break
   }
 
   if (!resultClicked) {
-    console.warn(`[AMAN CHAT] No search result clicked for number: ${cleanPhone}`)
+    console.warn(`[AMAN CHAT] No matching search result clicked for number: ${cleanPhone}`)
     await addErrorLog(`[SEARCH WARN] Kontak / nomor ${cleanPhone} tidak ditemukan di hasil pencarian.`)
   }
 }
@@ -817,7 +801,7 @@ export async function runRealBroadcast(
   const {
     numbers, message1: msg1, message2: msg2, useTwoMessages: useTwo,
     minInterval: minInt, maxInterval: maxInt, typingMode: mode,
-    maxRetries = 1, batchCooldownEvery = 0, batchCooldownSeconds = 30,
+    maxRetries = 0, batchCooldownEvery = 0, batchCooldownSeconds = 30,
     useBatching = false, batchSize = 10, batchDelayMinutes = 2,
     enableSpintax = true, onProgress
   } = opts
