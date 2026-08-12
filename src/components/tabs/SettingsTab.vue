@@ -100,35 +100,54 @@
         </span>
       </div>
 
-      <div class="ac-form-group">
-        <label class="ac-label">Serial Number Lisensi</label>
-        <div class="ac-grid-2">
+      <div v-if="!isPremium" class="ac-license-form">
+        <div class="ac-form-group">
+          <label class="ac-label">Serial Number Lisensi</label>
           <input
             v-model="licenseKey"
             class="ac-input"
             placeholder="Masukkan Serial Number (contoh: SM-2026-ABC1)..."
           />
-          <button class="ac-btn primary sm" @click="verifyLicense" :disabled="isVerifying">
-            {{ isVerifying ? '⏳ Memeriksa...' : 'Verifikasi' }}
-          </button>
         </div>
+
+        <div class="ac-grid-2" style="margin-top: 8px;">
+          <div class="ac-form-group">
+            <label class="ac-label">Email Pengguna</label>
+            <input
+              v-model="userEmailInput"
+              class="ac-input"
+              placeholder="contoh@gmail.com"
+            />
+          </div>
+          <div class="ac-form-group">
+            <label class="ac-label">No. WhatsApp / HP</label>
+            <input
+              v-model="userPhoneInput"
+              class="ac-input"
+              placeholder="08123456789"
+            />
+          </div>
+        </div>
+
+        <button class="ac-btn primary sm" style="margin-top: 10px; width: 100%;" @click="verifyLicense" :disabled="isVerifying">
+          {{ isVerifying ? '⏳ Memeriksa ke Server...' : '🔑 Aktivasi & Verifikasi Lisensi' }}
+        </button>
       </div>
 
       <!-- Verified License Information Card -->
-      <div v-if="isPremium && licenseDetails" class="ac-license-details" style="margin-top: 12px; padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+      <div v-if="isPremium && licenseDetails" class="ac-license-details" style="margin-top: 8px; padding: 12px; background: #ecfdf5; border: 1px solid #6ee7b7; border-radius: 8px;">
         <div class="ac-section-header" style="margin-bottom: 8px;">
-          <span class="ac-label" style="font-size: 0.8rem; color: #0f172a;">📋 Detail Aktivasi Lisensi</span>
+          <span class="ac-label" style="font-size: 0.8rem; color: #047857;">🎉 Detail Aktivasi Lisensi Premium</span>
           <button class="ac-btn danger sm" style="padding: 2px 6px; font-size: 0.68rem;" @click="unlinkLicense">Unlink / Hapus</button>
         </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 0.72rem;">
-          <div><strong style="color: #64748b;">Serial Number:</strong> {{ licenseDetails.serialNumber }}</div>
-          <div><strong style="color: #64748b;">Status:</strong> <span class="ac-badge customer sm" style="font-size: 0.65rem;">{{ licenseDetails.status }}</span></div>
-          <div><strong style="color: #64748b;">Device ID:</strong> {{ licenseDetails.deviceId }}</div>
-          <div><strong style="color: #64748b;">No. Telepon:</strong> {{ licenseDetails.phone || '-' }}</div>
-          <div><strong style="color: #64748b;">Email:</strong> {{ licenseDetails.email || '-' }}</div>
-          <div><strong style="color: #64748b;">Tanggal Beli:</strong> {{ licenseDetails.purchaseDate || '-' }}</div>
-          <div><strong style="color: #64748b;">Tanggal Expired:</strong> {{ licenseDetails.expiryDate || '-' }}</div>
-          <div><strong style="color: #64748b;">Jangka Waktu:</strong> {{ licenseDetails.duration || '-' }}</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 0.72rem; color: #065f46;">
+          <div><strong>Serial Number:</strong> {{ licenseDetails.serialNumber }}</div>
+          <div><strong>Status:</strong> <span class="ac-badge customer sm" style="font-size: 0.65rem;">ACTIVE</span></div>
+          <div><strong>Device ID:</strong> {{ licenseDetails.deviceId }}</div>
+          <div><strong>Email:</strong> {{ licenseDetails.email || userEmailInput || '-' }}</div>
+          <div><strong>No. Telepon:</strong> {{ licenseDetails.phone || userPhoneInput || '-' }}</div>
+          <div><strong>Tanggal Beli:</strong> {{ licenseDetails.purchaseDate || 'Otomatis Server' }}</div>
+          <div><strong>Masa Aktif:</strong> <span style="font-weight: 700; color: #047857;">{{ licenseDetails.expiryDate || 'Aktif' }} ({{ licenseDetails.duration || 'Resmi' }})</span></div>
         </div>
       </div>
     </div>
@@ -212,6 +231,8 @@ const privacy = ref<PrivacySettings>({
 
 const licenseApiUrl = ref('')
 const licenseKey = ref('')
+const userEmailInput = ref('')
+const userPhoneInput = ref('')
 const licenseDetails = ref<LicenseDetails | null>(null)
 const isPremium = ref(false)
 const isVerifying = ref(false)
@@ -248,6 +269,10 @@ async function loadSettings() {
   const key = await getLicenseKey()
   licenseKey.value = key || ''
   licenseDetails.value = await getLicenseDetails()
+  if (licenseDetails.value) {
+    userEmailInput.value = licenseDetails.value.email || ''
+    userPhoneInput.value = licenseDetails.value.phone || ''
+  }
   isPremium.value = await getIsPremium()
   await loadErrorLogs()
 }
@@ -288,7 +313,12 @@ async function verifyLicense() {
   await saveApiUrl()
 
   try {
-    const result = await verifySpreadsheetLicense(licenseKey.value, licenseApiUrl.value)
+    const result = await verifySpreadsheetLicense(
+      licenseKey.value,
+      userEmailInput.value,
+      userPhoneInput.value,
+      licenseApiUrl.value
+    )
     if (result.valid && result.details) {
       await setLicenseKey(licenseKey.value.trim().toUpperCase())
       await setLicenseDetails(result.details)

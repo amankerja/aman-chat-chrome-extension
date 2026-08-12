@@ -66,7 +66,9 @@ export async function verifyLicenseKey(rawKey: string): Promise<LicenseVerificat
 
 export async function verifySpreadsheetLicense(
   serialNumber: string,
-  apiUrl: string
+  email: string = '',
+  phone: string = '',
+  apiUrl: string = ''
 ): Promise<LicenseVerificationResult> {
   const cleanSerial = serialNumber.trim().toUpperCase()
   if (!cleanSerial) {
@@ -84,6 +86,8 @@ export async function verifySpreadsheetLicense(
           serialNumber: cleanSerial,
           status: 'Active',
           deviceId,
+          email: email.trim(),
+          phone: phone.trim(),
           duration: 'Lifetime',
           lastVerified: Date.now()
         }
@@ -101,6 +105,8 @@ export async function verifySpreadsheetLicense(
     url.searchParams.append('app', 'whatsappv1')
     url.searchParams.append('sn', cleanSerial)
     url.searchParams.append('deviceId', deviceId)
+    if (email.trim()) url.searchParams.append('email', email.trim())
+    if (phone.trim()) url.searchParams.append('no_telepon', phone.trim())
 
     const response = await fetch(url.toString(), {
       method: 'GET'
@@ -111,50 +117,52 @@ export async function verifySpreadsheetLicense(
     }
 
     const rawText = (await response.text()).trim()
-    
-    // Support text responses from router.gs (ACTIVATED, SUCCESS, ALREADY_USED, INACTIVE, INVALID)
-    if (rawText === 'ACTIVATED' || rawText === 'SUCCESS') {
-      const details: LicenseDetails = {
-        serialNumber: cleanSerial,
-        status: 'Active',
-        deviceId,
-        lastVerified: Date.now()
-      }
-      const msg = rawText === 'ACTIVATED' 
-        ? 'Aktivasi lisensi berhasil! Perangkat terdaftar.' 
-        : 'Lisensi aktif dan valid di perangkat ini.'
-      return { valid: true, message: msg, details }
-    } else if (rawText === 'ALREADY_USED') {
-      return { valid: false, message: 'Serial Number ini sudah digunakan di perangkat lain (Device ID Mismatch).' }
-    } else if (rawText === 'INACTIVE') {
-      return { valid: false, message: 'Status lisensi Anda tidak aktif (Inactive/Suspended).' }
-    } else if (rawText === 'INVALID') {
-      return { valid: false, message: 'Serial Number tidak ditemukan di Spreadsheet!' }
-    } else if (rawText === 'ERROR_SHEET_NOT_FOUND') {
-      return { valid: false, message: 'Tab WHATSAPP-V1 tidak ditemukan di Google Spreadsheet server.' }
-    }
 
-    // JSON fallback support
+    // First try parsing as JSON (Apps Script JSON response)
     try {
       const data = JSON.parse(rawText)
-      if (data.status === 'success' || data.valid === true) {
+      if (data.status === 'success' || data.status === 'ACTIVATED' || data.status === 'SUCCESS' || data.valid === true) {
         const details: LicenseDetails = {
           serialNumber: data.serialNumber || cleanSerial,
-          status: data.status || 'Active',
+          status: 'Active',
           deviceId: data.deviceId || deviceId,
-          email: data.email || '',
-          phone: data.phone || '',
+          email: data.email || email.trim(),
+          phone: data.phone || phone.trim(),
           purchaseDate: data.purchaseDate || '',
           expiryDate: data.expiryDate || '',
           duration: data.duration || '',
           lastVerified: Date.now()
         }
-        return { valid: true, message: data.message || 'Lisensi Google Spreadsheet Aktif!', details }
+        return { valid: true, message: data.message || 'Aktivasi Lisensi Google Spreadsheet Berhasil!', details }
       } else {
-        return { valid: false, message: data.message || 'Lisensi tidak valid.' }
+        return { valid: false, message: data.message || 'Lisensi tidak valid atau telah expired.' }
       }
     } catch {
-      return { valid: false, message: `Respon server: ${rawText}` }
+      // Text fallback from router.gs
+      if (rawText === 'ACTIVATED' || rawText === 'SUCCESS') {
+        const details: LicenseDetails = {
+          serialNumber: cleanSerial,
+          status: 'Active',
+          deviceId,
+          email: email.trim(),
+          phone: phone.trim(),
+          lastVerified: Date.now()
+        }
+        const msg = rawText === 'ACTIVATED' 
+          ? 'Aktivasi lisensi berhasil! Data email & No HP terdaftar di Google Spreadsheet.' 
+          : 'Lisensi aktif dan valid di perangkat ini.'
+        return { valid: true, message: msg, details }
+      } else if (rawText === 'ALREADY_USED') {
+        return { valid: false, message: 'Serial Number ini sudah digunakan di perangkat lain (Device ID Mismatch).' }
+      } else if (rawText === 'INACTIVE') {
+        return { valid: false, message: 'Status lisensi Anda tidak aktif (Inactive/Suspended).' }
+      } else if (rawText === 'INVALID') {
+        return { valid: false, message: 'Serial Number tidak ditemukan di Spreadsheet!' }
+      } else if (rawText === 'ERROR_SHEET_NOT_FOUND') {
+        return { valid: false, message: 'Tab WHATSAPP-V1 tidak ditemukan di Google Spreadsheet server.' }
+      } else {
+        return { valid: false, message: `Respon server: ${rawText}` }
+      }
     }
   } catch (e: any) {
     console.warn('[AMAN CHAT] License Spreadsheet API error:', e)
@@ -166,10 +174,12 @@ export async function verifySpreadsheetLicense(
           serialNumber: cleanSerial,
           status: 'Active',
           deviceId,
+          email: email.trim(),
+          phone: phone.trim(),
           lastVerified: Date.now()
         }
       }
     }
-    return { valid: false, message: 'Gagal terhubung ke Apps Script API! Periksa koneksi internet atau URL API.' }
+    return { valid: false, message: 'Gagal terhubung ke Apps Script API! Periksa koneksi internet.' }
   }
 }
