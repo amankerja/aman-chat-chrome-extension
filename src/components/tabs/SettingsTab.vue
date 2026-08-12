@@ -132,6 +132,13 @@
         <button class="ac-btn primary sm" style="margin-top: 10px; width: 100%;" @click="verifyLicense" :disabled="isVerifying">
           {{ isVerifying ? '⏳ Memeriksa ke Server...' : '🔑 Aktivasi & Verifikasi Lisensi' }}
         </button>
+
+        <div style="margin-top: 10px; padding: 8px 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; text-align: center; font-size: 0.72rem; color: #475569;">
+          Belum memiliki Serial Number Lisensi? 
+          <a href="https://wa.me/6282223089790?text=Halo%20Admin,%20saya%20ingin%20membeli%20Lisensi%20AMAN%20CHAT" target="_blank" style="color: #2563eb; font-weight: 600; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; margin-left: 2px;">
+            💬 Hubungi WhatsApp Admin (+62 822-2308-9790)
+          </a>
+        </div>
       </div>
 
       <!-- Verified License Information Card -->
