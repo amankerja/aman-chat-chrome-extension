@@ -138,7 +138,12 @@
       <div v-if="isPremium && licenseDetails" class="ac-license-details" style="margin-top: 8px; padding: 12px; background: #ecfdf5; border: 1px solid #6ee7b7; border-radius: 8px;">
         <div class="ac-section-header" style="margin-bottom: 8px;">
           <span class="ac-label" style="font-size: 0.8rem; color: #047857;">🎉 Detail Aktivasi Lisensi Premium</span>
-          <button class="ac-btn danger sm" style="padding: 2px 6px; font-size: 0.68rem;" @click="unlinkLicense">Unlink / Hapus</button>
+          <div style="display: flex; gap: 4px;">
+            <button class="ac-btn secondary sm" style="padding: 2px 8px; font-size: 0.68rem;" @click="refreshLicenseData" :disabled="isVerifying">
+              {{ isVerifying ? '⏳ Updating...' : '🔄 Sync Google Sheet' }}
+            </button>
+            <button class="ac-btn danger sm" style="padding: 2px 6px; font-size: 0.68rem;" @click="unlinkLicense">Unlink / Hapus</button>
+          </div>
         </div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.72rem; color: #065f46;">
           <div><strong>Serial Number:</strong> {{ licenseDetails.serialNumber }}</div>
@@ -332,6 +337,30 @@ async function verifyLicense() {
     }
   } catch (e: any) {
     alert('Terjadi kesalahan saat memverifikasi lisensi: ' + e.message)
+  } finally {
+    isVerifying.value = false
+  }
+}
+
+async function refreshLicenseData() {
+  if (!licenseKey.value) return
+  isVerifying.value = true
+  try {
+    const result = await verifySpreadsheetLicense(
+      licenseKey.value,
+      userEmailInput.value,
+      userPhoneInput.value,
+      licenseApiUrl.value
+    )
+    if (result.valid && result.details) {
+      await setLicenseDetails(result.details)
+      licenseDetails.value = result.details
+      alert('✅ Data lisensi, durasi & tanggal expired berhasil di-sync dari Google Sheet!')
+    } else {
+      alert(`❌ ${result.message || 'Gagal menyinkronkan data lisensi.'}`)
+    }
+  } catch (e: any) {
+    alert('Gagal menyinkronkan data lisensi: ' + e.message)
   } finally {
     isVerifying.value = false
   }
