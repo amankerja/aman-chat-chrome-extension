@@ -66,13 +66,12 @@ export async function checkForGitHubUpdate(repoName?: string): Promise<GitHubUpd
   }
 
   try {
-    const apiUrl = `https://api.github.com/repos/${repo}/releases/latest`
+    const apiUrl = `https://api.github.com/repos/${repo}/releases`
     const response = await fetch(apiUrl, {
       headers: { 'Accept': 'application/vnd.github.v3+json' }
     })
 
     if (!response.ok) {
-      // Gracefully handle 404 (repo or release not created yet) without logging console.warn
       return {
         hasUpdate: false,
         latestVersion: currentVersion,
@@ -84,7 +83,20 @@ export async function checkForGitHubUpdate(repoName?: string): Promise<GitHubUpd
       }
     }
 
-    const data = await response.json()
+    const releases = await response.json()
+    if (!Array.isArray(releases) || releases.length === 0) {
+      return {
+        hasUpdate: false,
+        latestVersion: currentVersion,
+        currentVersion,
+        releaseUrl: `https://github.com/${repo}/releases`,
+        downloadUrl: '',
+        releaseNotes: '',
+        checkedAt: Date.now()
+      }
+    }
+
+    const data = releases[0]
     const latestVersion = (data.tag_name || '').replace(/^v/i, '').trim()
     const releaseUrl = data.html_url || `https://github.com/${repo}/releases`
     
