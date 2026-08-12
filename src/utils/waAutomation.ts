@@ -407,16 +407,24 @@ export function dismissReloadCallsModal(): boolean {
 }
 
 export async function openPhoneChat(phone: string): Promise<void> {
-  const cleanPhone = phone.replace(/[^0-9]/g, '')
-  if (!cleanPhone) return
+  const rawDigits = phone.replace(/[^0-9]/g, '')
+  if (!rawDigits) return
+
+  // Automatically normalize local Indonesian number 08xxx to 628xxx for WA Web compatibility
+  const cleanPhone = rawDigits.startsWith('0') ? '62' + rawDigits.slice(1) : rawDigits
+  const significantDigits = rawDigits.replace(/^0+/, '').replace(/^62+/, '')
+  const targetSuffix = cleanPhone.length >= 7 ? cleanPhone.slice(-7) : cleanPhone
 
   dismissReloadCallsModal()
 
   // 0. Check if the chat for this phone is already open in composer
   const activeHeader = document.querySelector('header [title]') || document.querySelector('#main header')
-  if (activeHeader && activeHeader.textContent?.replace(/[^0-9]/g, '').includes(cleanPhone)) {
-    console.log(`[AMAN CHAT] Chat for ${cleanPhone} is already open.`)
-    return
+  if (activeHeader) {
+    const headerDigits = activeHeader.textContent?.replace(/[^0-9]/g, '') || ''
+    if (headerDigits.includes(cleanPhone) || (significantDigits.length >= 6 && headerDigits.includes(significantDigits))) {
+      console.log(`[AMAN CHAT] Chat for ${cleanPhone} is already open.`)
+      return
+    }
   }
 
   // Step 1: Check if search input is ALREADY open/visible (e.g. New chat drawer is open)
@@ -468,9 +476,8 @@ export async function openPhoneChat(phone: string): Promise<void> {
   await typeIntoSearchInput(searchInput, cleanPhone)
   await new Promise(r => setTimeout(r, 400))
 
-  // Step 4: Wait for search result list item that STRICTLY MATCHES cleanPhone and click it
+  // Step 4: Wait for search result list item that MATCHES cleanPhone, rawDigits, or significantDigits
   let resultClicked = false
-  const targetSuffix = cleanPhone.length >= 7 ? cleanPhone.slice(-7) : cleanPhone
 
   for (let attempt = 0; attempt < 25; attempt++) {
     await new Promise(r => setTimeout(r, 150))
@@ -497,8 +504,13 @@ export async function openPhoneChat(phone: string): Promise<void> {
         if (!isElementVisible(el) || isInstallerOrDownloadElement(el) || el.closest('#main')) continue
 
         const itemText = (el.textContent || '').replace(/[^0-9]/g, '')
-        // STRICT MATCH: Item MUST contain the full cleanPhone or last 7 digits of cleanPhone!
-        if (itemText.includes(cleanPhone) || itemText.includes(targetSuffix)) {
+        // MULTI-FORMAT MATCH: Check cleanPhone, rawDigits, significantDigits, or targetSuffix!
+        if (
+          itemText.includes(cleanPhone) ||
+          itemText.includes(rawDigits) ||
+          (significantDigits.length >= 6 && itemText.includes(significantDigits)) ||
+          itemText.includes(targetSuffix)
+        ) {
           const clickTarget = el.closest('div[role="button"]') || el.closest('[role="listitem"]') || el
           ;(clickTarget as HTMLElement).click()
           resultClicked = true
@@ -513,7 +525,7 @@ export async function openPhoneChat(phone: string): Promise<void> {
 
   if (!resultClicked) {
     console.warn(`[AMAN CHAT] No matching search result clicked for number: ${cleanPhone}`)
-    await addErrorLog(`[SEARCH WARN] Kontak / nomor ${cleanPhone} tidak ditemukan di hasil pencarian.`)
+    await addErrorLog(`[SEARCH WARN] Kontak / nomor ${cleanPhone} (asal: ${rawDigits}) tidak ditemukan di hasil pencarian.`)
   }
 }
 

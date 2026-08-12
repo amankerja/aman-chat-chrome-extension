@@ -338,6 +338,7 @@ const parsedNumbers = computed(() => {
   const raw = rawNumbers.value
     .split('\n')
     .map(n => n.replace(/[^0-9]/g, ''))
+    .map(n => n.startsWith('0') ? '62' + n.slice(1) : n)
     .filter(n => n.length >= 8)
 
   const seen = new Set<string>()
