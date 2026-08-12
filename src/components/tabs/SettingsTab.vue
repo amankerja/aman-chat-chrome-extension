@@ -94,24 +94,13 @@
     <!-- License & Account Status Card -->
     <div class="ac-card">
       <div class="ac-section-header">
-        <h3 class="ac-label">Lisensi & Status Akun (Google Spreadsheet)</h3>
+        <h3 class="ac-label">Lisensi & Status Akun</h3>
         <span class="ac-badge" :class="isPremium ? 'customer' : 'queuing'">
           {{ isPremium ? 'PREMIUM ACTIVE' : 'FREE VERSION' }}
         </span>
       </div>
 
       <div class="ac-form-group">
-        <label class="ac-label">URL Web App API (Google Apps Script)</label>
-        <input
-          v-model="licenseApiUrl"
-          class="ac-input"
-          placeholder="https://script.google.com/macros/s/AKfycb.../exec"
-          @change="saveApiUrl"
-        />
-        <span class="ac-subtext" style="margin-top: 2px;">Opsional: Kosongkan jika ingin verifikasi Serial Number lokal.</span>
-      </div>
-
-      <div class="ac-form-group" style="margin-top: 10px;">
         <label class="ac-label">Serial Number Lisensi</label>
         <div class="ac-grid-2">
           <input
