@@ -115,6 +115,19 @@ aman-chat-extension/
 
 ---
 
+## 🚀 Panduan Rilis Update Baru via GitHub
+
+Lihat dokumen lengkap [PANDUAN_UPDATE_GITHUB.md](file:///d:/APLIKASI%20FAQIH/WA%20EXTENSION%20100%20RUPIAH/aman-chat-extension/PANDUAN_UPDATE_GITHUB.md) untuk langkah-langkah merilis versi update baru ke customer Anda.
+
+Ringkasan:
+1. Ubah versi di `manifest.json` (misal `"3.0.0"` ➔ `"3.0.1"`).
+2. Jalankan `npm run build` dan buat file `.zip` dari isi folder `dist/`.
+3. Buka GitHub ➔ **Releases** ➔ **Create a new release** (Tag: `v3.0.1`).
+4. Upload file `.zip` hasil build dan klik **Publish release**.
+5. Customer akan otomatis melihat **Banner Notifikasi Update** di bagian atas sidebar ekstensi mereka!
+
+---
+
 ## 📄 Lisensi & Hak Cipta
 
 © 2026 **AMAN CHAT** — Part of **[amankerja.com](https://amankerja.com)**. All Rights Reserved.
