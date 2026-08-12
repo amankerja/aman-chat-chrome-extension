@@ -133,7 +133,7 @@ export async function verifySpreadsheetLicense(
           duration: data.duration || '',
           lastVerified: Date.now()
         }
-        return { valid: true, message: data.message || 'Aktivasi Lisensi Google Spreadsheet Berhasil!', details }
+        return { valid: true, message: data.message || 'Aktivasi Lisensi Berhasil!', details }
       } else {
         return { valid: false, message: data.message || 'Lisensi tidak valid atau telah expired.' }
       }
@@ -149,7 +149,7 @@ export async function verifySpreadsheetLicense(
           lastVerified: Date.now()
         }
         const msg = rawText === 'ACTIVATED' 
-          ? 'Aktivasi lisensi berhasil! Data email & No HP terdaftar di Google Spreadsheet.' 
+          ? 'Aktivasi lisensi berhasil! Data email & No. WhatsApp telah terdaftar.' 
           : 'Lisensi aktif dan valid di perangkat ini.'
         return { valid: true, message: msg, details }
       } else if (rawText === 'ALREADY_USED') {
@@ -157,15 +157,15 @@ export async function verifySpreadsheetLicense(
       } else if (rawText === 'INACTIVE') {
         return { valid: false, message: 'Status lisensi Anda tidak aktif (Inactive/Suspended).' }
       } else if (rawText === 'INVALID') {
-        return { valid: false, message: 'Serial Number tidak ditemukan di Spreadsheet!' }
+        return { valid: false, message: 'Serial Number tidak ditemukan di server!' }
       } else if (rawText === 'ERROR_SHEET_NOT_FOUND') {
-        return { valid: false, message: 'Tab WHATSAPP-V1 tidak ditemukan di Google Spreadsheet server.' }
+        return { valid: false, message: 'Server lisensi tidak terjangkau saat ini.' }
       } else {
         return { valid: false, message: `Respon server: ${rawText}` }
       }
     }
   } catch (e: any) {
-    console.warn('[AMAN CHAT] License Spreadsheet API error:', e)
+    console.warn('[AMAN CHAT] License API error:', e)
     if (isValidLicenseFormat(cleanSerial)) {
       return {
         valid: true,
@@ -180,6 +180,6 @@ export async function verifySpreadsheetLicense(
         }
       }
     }
-    return { valid: false, message: 'Gagal terhubung ke Apps Script API! Periksa koneksi internet.' }
+    return { valid: false, message: 'Gagal terhubung ke Server Lisensi! Periksa koneksi internet.' }
   }
 }
