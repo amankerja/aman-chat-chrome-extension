@@ -274,8 +274,10 @@ export function setLicenseKey(key: string | null): Promise<void> {
   return setStorage<string | null>(STORAGE_KEYS.LICENSE_KEY, key)
 }
 
+const DEFAULT_LICENSE_API_URL = 'https://script.google.com/macros/s/AKfycby8xke5hsYB_qyM9B1aCmFFNkxpGzzeLecbAPb1aKgKqreFo3c4ohf9YksTUldSJwVbUg/exec'
+
 export function getLicenseApiUrl(): Promise<string> {
-  return getStorage<string>(STORAGE_KEYS.LICENSE_API_URL, '')
+  return getStorage<string>(STORAGE_KEYS.LICENSE_API_URL, DEFAULT_LICENSE_API_URL)
 }
 
 export function setLicenseApiUrl(url: string): Promise<void> {
