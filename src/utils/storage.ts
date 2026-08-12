@@ -9,7 +9,8 @@ import type {
   Analytics,
   DailyStat,
   CustomTab,
-  BroadcastState
+  BroadcastState,
+  LicenseDetails
 } from '../types'
 
 const STORAGE_KEYS = {
@@ -27,6 +28,9 @@ const STORAGE_KEYS = {
   ANALYTICS: 'wku_analytics',
   CUSTOM_TABS: 'wku_custom_tabs',
   LICENSE_KEY: 'wku_license_key',
+  LICENSE_API_URL: 'wku_license_api_url',
+  LICENSE_DETAILS: 'wku_license_details',
+  DEVICE_ID: 'wku_device_id',
   IS_PREMIUM: 'wku_is_premium'
 } as const
 
@@ -268,6 +272,32 @@ export function getLicenseKey(): Promise<string | null> {
 
 export function setLicenseKey(key: string | null): Promise<void> {
   return setStorage<string | null>(STORAGE_KEYS.LICENSE_KEY, key)
+}
+
+export function getLicenseApiUrl(): Promise<string> {
+  return getStorage<string>(STORAGE_KEYS.LICENSE_API_URL, '')
+}
+
+export function setLicenseApiUrl(url: string): Promise<void> {
+  return setStorage<string>(STORAGE_KEYS.LICENSE_API_URL, url)
+}
+
+export function getLicenseDetails(): Promise<LicenseDetails | null> {
+  return getStorage<LicenseDetails | null>(STORAGE_KEYS.LICENSE_DETAILS, null)
+}
+
+export function setLicenseDetails(details: LicenseDetails | null): Promise<void> {
+  return setStorage<LicenseDetails | null>(STORAGE_KEYS.LICENSE_DETAILS, details)
+}
+
+export async function getDeviceId(): Promise<string> {
+  let devId = await getStorage<string>(STORAGE_KEYS.DEVICE_ID, '')
+  if (!devId) {
+    const randomSeed = Math.random().toString(36).substring(2, 6).toUpperCase()
+    devId = `DEV-${Date.now().toString(36).toUpperCase()}-${randomSeed}`
+    await setStorage(STORAGE_KEYS.DEVICE_ID, devId)
+  }
+  return devId
 }
 
 export function getIsPremium(): Promise<boolean> {

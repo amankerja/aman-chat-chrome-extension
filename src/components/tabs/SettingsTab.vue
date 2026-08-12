@@ -94,17 +94,52 @@
     <!-- License & Account Status Card -->
     <div class="ac-card">
       <div class="ac-section-header">
-        <h3 class="ac-label">Lisensi & Status Akun</h3>
+        <h3 class="ac-label">Lisensi & Status Akun (Google Spreadsheet)</h3>
         <span class="ac-badge" :class="isPremium ? 'customer' : 'queuing'">
           {{ isPremium ? 'PREMIUM ACTIVE' : 'FREE VERSION' }}
         </span>
       </div>
 
       <div class="ac-form-group">
-        <label class="ac-label">Kode Lisensi</label>
+        <label class="ac-label">URL Web App API (Google Apps Script)</label>
+        <input
+          v-model="licenseApiUrl"
+          class="ac-input"
+          placeholder="https://script.google.com/macros/s/AKfycb.../exec"
+          @change="saveApiUrl"
+        />
+        <span class="ac-subtext" style="margin-top: 2px;">Opsional: Kosongkan jika ingin verifikasi Serial Number lokal.</span>
+      </div>
+
+      <div class="ac-form-group" style="margin-top: 10px;">
+        <label class="ac-label">Serial Number Lisensi</label>
         <div class="ac-grid-2">
-          <input v-model="licenseKey" class="ac-input" placeholder="Masukkan Lisensi AMAN CHAT..." />
-          <button class="ac-btn primary sm" @click="verifyLicense">Verifikasi</button>
+          <input
+            v-model="licenseKey"
+            class="ac-input"
+            placeholder="Masukkan Serial Number (contoh: SM-2026-ABC1)..."
+          />
+          <button class="ac-btn primary sm" @click="verifyLicense" :disabled="isVerifying">
+            {{ isVerifying ? '⏳ Memeriksa...' : 'Verifikasi' }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Verified License Information Card -->
+      <div v-if="isPremium && licenseDetails" class="ac-license-details" style="margin-top: 12px; padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+        <div class="ac-section-header" style="margin-bottom: 8px;">
+          <span class="ac-label" style="font-size: 0.8rem; color: #0f172a;">📋 Detail Aktivasi Lisensi</span>
+          <button class="ac-btn danger sm" style="padding: 2px 6px; font-size: 0.68rem;" @click="unlinkLicense">Unlink / Hapus</button>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 0.72rem;">
+          <div><strong style="color: #64748b;">Serial Number:</strong> {{ licenseDetails.serialNumber }}</div>
+          <div><strong style="color: #64748b;">Status:</strong> <span class="ac-badge customer sm" style="font-size: 0.65rem;">{{ licenseDetails.status }}</span></div>
+          <div><strong style="color: #64748b;">Device ID:</strong> {{ licenseDetails.deviceId }}</div>
+          <div><strong style="color: #64748b;">No. Telepon:</strong> {{ licenseDetails.phone || '-' }}</div>
+          <div><strong style="color: #64748b;">Email:</strong> {{ licenseDetails.email || '-' }}</div>
+          <div><strong style="color: #64748b;">Tanggal Beli:</strong> {{ licenseDetails.purchaseDate || '-' }}</div>
+          <div><strong style="color: #64748b;">Tanggal Expired:</strong> {{ licenseDetails.expiryDate || '-' }}</div>
+          <div><strong style="color: #64748b;">Jangka Waktu:</strong> {{ licenseDetails.duration || '-' }}</div>
         </div>
       </div>
     </div>
@@ -158,18 +193,22 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import type { PrivacySettings } from '../../types'
+import type { PrivacySettings, LicenseDetails } from '../../types'
 import {
   getPrivacySettings,
   setPrivacySettings,
   getLicenseKey,
   setLicenseKey,
+  getLicenseApiUrl,
+  setLicenseApiUrl,
+  getLicenseDetails,
+  setLicenseDetails,
   getIsPremium,
   setIsPremium,
   getErrorLogs,
   clearErrorLogs
 } from '../../utils/storage'
-import { verifyLicenseKey } from '../../utils/licensing'
+import { verifySpreadsheetLicense } from '../../utils/licensing'
 
 const privacy = ref<PrivacySettings>({
   blurChats: false,
@@ -182,8 +221,11 @@ const privacy = ref<PrivacySettings>({
   inactivityTimeout: 5
 })
 
+const licenseApiUrl = ref('')
 const licenseKey = ref('')
+const licenseDetails = ref<LicenseDetails | null>(null)
 const isPremium = ref(false)
+const isVerifying = ref(false)
 const newPinInput = ref('')
 const errorLogsList = ref<string[]>([])
 const copySuccess = ref(false)
@@ -213,14 +255,20 @@ async function clearLogs() {
 
 async function loadSettings() {
   privacy.value = await getPrivacySettings()
+  licenseApiUrl.value = await getLicenseApiUrl()
   const key = await getLicenseKey()
   licenseKey.value = key || ''
+  licenseDetails.value = await getLicenseDetails()
   isPremium.value = await getIsPremium()
   await loadErrorLogs()
 }
 
 async function savePrivacy() {
   await setPrivacySettings(privacy.value)
+}
+
+async function saveApiUrl() {
+  await setLicenseApiUrl(licenseApiUrl.value.trim())
 }
 
 function handlePinToggle() {
@@ -242,18 +290,42 @@ async function saveNewPin() {
 }
 
 async function verifyLicense() {
-  // Was: any string 6+ characters long was accepted as a valid Premium
-  // license. Now checked against the AMAN-XXXX-XXXX-CCCC format + checksum
-  // (see src/utils/licensing.ts for why this still needs a real backend
-  // eventually).
-  const result = await verifyLicenseKey(licenseKey.value)
-  if (result.valid) {
-    await setLicenseKey(licenseKey.value.trim().toUpperCase())
-    await setIsPremium(true)
-    isPremium.value = true
-    alert('Lisensi berhasil diverifikasi! Fitur Premium aktif.')
-  } else {
-    alert('Kode lisensi tidak valid. Format yang benar: AMAN-XXXX-XXXX-XXXX')
+  if (!licenseKey.value.trim()) {
+    alert('Harap masukkan Serial Number lisensi terlebih dahulu.')
+    return
+  }
+
+  isVerifying.value = true
+  await saveApiUrl()
+
+  try {
+    const result = await verifySpreadsheetLicense(licenseKey.value, licenseApiUrl.value)
+    if (result.valid && result.details) {
+      await setLicenseKey(licenseKey.value.trim().toUpperCase())
+      await setLicenseDetails(result.details)
+      await setIsPremium(true)
+      licenseDetails.value = result.details
+      isPremium.value = true
+      alert(`✅ ${result.message || 'Lisensi berhasil diverifikasi! Fitur Premium aktif.'}`)
+    } else {
+      alert(`❌ ${result.message || 'Kode lisensi tidak valid.'}`)
+    }
+  } catch (e: any) {
+    alert('Terjadi kesalahan saat memverifikasi lisensi: ' + e.message)
+  } finally {
+    isVerifying.value = false
+  }
+}
+
+async function unlinkLicense() {
+  if (confirm('Apakah Anda yakin ingin melepas lisensi dari perangkat ini?')) {
+    await setLicenseKey('')
+    await setLicenseDetails(null)
+    await setIsPremium(false)
+    licenseKey.value = ''
+    licenseDetails.value = null
+    isPremium.value = false
+    alert('Lisensi berhasil dilepas.')
   }
 }
 

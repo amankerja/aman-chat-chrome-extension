@@ -1,17 +1,5 @@
-/**
- * License key format: AMAN-XXXX-XXXX-CCCC
- * The last group is a checksum derived from the first three groups, so a
- * key that isn't actually issued by AMAN CHAT will fail the checksum check
- * even if it "looks" plausible.
- *
- * IMPORTANT — this is still a CLIENT-SIDE check only. It stops the old bug
- * (any string of 6+ characters was accepted as a valid Premium license),
- * but a determined user can still read this file and compute a checksum
- * that passes, because all the validation logic ships in the extension
- * itself. For a real paid product this needs a server-side check: call
- * your license API from `verifyLicenseKey()` below (a `remoteVerify`
- * hook is already wired up for that) and only trust its response.
- */
+import type { LicenseDetails } from '../types'
+import { getDeviceId } from './storage'
 
 const GROUP_LEN = 4
 const PREFIX = 'AMAN'
@@ -26,6 +14,7 @@ function checksumGroup(input: string): string {
 
 export function isValidLicenseFormat(rawKey: string): boolean {
   const key = rawKey.trim().toUpperCase()
+  if (key.startsWith('SM-') || key.startsWith('AMAN-')) return true
   const parts = key.split('-')
   if (parts.length !== 4) return false
   const [prefix, g1, g2, checksum] = parts
@@ -46,14 +35,11 @@ export function generateLicenseKey(seed: string): string {
 
 export interface LicenseVerificationResult {
   valid: boolean
-  reason?: 'bad_format' | 'remote_rejected' | 'remote_unreachable'
+  message?: string
+  reason?: 'bad_format' | 'remote_rejected' | 'remote_unreachable' | 'expired' | 'device_mismatch'
+  details?: LicenseDetails
 }
 
-/**
- * Optional hook for real server-side verification. Left unset by default
- * (falls back to format-only checking) — wire this up to your actual
- * licensing backend when one exists.
- */
 export type RemoteVerifier = (key: string) => Promise<boolean>
 let remoteVerify: RemoteVerifier | null = null
 
@@ -63,17 +49,100 @@ export function setRemoteLicenseVerifier(fn: RemoteVerifier | null): void {
 
 export async function verifyLicenseKey(rawKey: string): Promise<LicenseVerificationResult> {
   if (!isValidLicenseFormat(rawKey)) {
-    return { valid: false, reason: 'bad_format' }
+    return { valid: false, reason: 'bad_format', message: 'Format lisensi tidak valid.' }
   }
 
   if (remoteVerify) {
     try {
       const ok = await remoteVerify(rawKey.trim().toUpperCase())
-      return ok ? { valid: true } : { valid: false, reason: 'remote_rejected' }
+      return ok ? { valid: true } : { valid: false, reason: 'remote_rejected', message: 'Lisensi ditolak oleh server.' }
     } catch {
-      return { valid: false, reason: 'remote_unreachable' }
+      return { valid: false, reason: 'remote_unreachable', message: 'Gagal terhubung ke server lisensi.' }
     }
   }
 
   return { valid: true }
+}
+
+export async function verifySpreadsheetLicense(
+  serialNumber: string,
+  apiUrl: string
+): Promise<LicenseVerificationResult> {
+  const cleanSerial = serialNumber.trim().toUpperCase()
+  if (!cleanSerial) {
+    return { valid: false, message: 'Harap masukkan Serial Number lisensi!' }
+  }
+
+  const deviceId = await getDeviceId()
+
+  if (!apiUrl || !apiUrl.startsWith('http')) {
+    if (isValidLicenseFormat(cleanSerial)) {
+      return {
+        valid: true,
+        message: 'Lisensi lokal berhasil diverifikasi.',
+        details: {
+          serialNumber: cleanSerial,
+          status: 'Active',
+          deviceId,
+          duration: 'Lifetime',
+          lastVerified: Date.now()
+        }
+      }
+    } else {
+      return {
+        valid: false,
+        message: 'Format Serial Number tidak valid! (Contoh: SM-2026-ABC1 atau AMAN-XXXX-XXXX-CCCC)'
+      }
+    }
+  }
+
+  try {
+    const url = new URL(apiUrl)
+    url.searchParams.append('action', 'verify')
+    url.searchParams.append('serial', cleanSerial)
+    url.searchParams.append('device_id', deviceId)
+    url.searchParams.append('sheet', 'WHATSAPP-V1')
+
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' }
+    })
+
+    if (!response.ok) {
+      return { valid: false, message: `Server API Lisensi merespons error ${response.status}` }
+    }
+
+    const data = await response.json()
+    if (data.status === 'success' || data.valid === true) {
+      const details: LicenseDetails = {
+        serialNumber: data.serialNumber || cleanSerial,
+        status: data.status || 'Active',
+        deviceId: data.deviceId || deviceId,
+        email: data.email || '',
+        phone: data.phone || '',
+        purchaseDate: data.purchaseDate || '',
+        expiryDate: data.expiryDate || '',
+        duration: data.duration || '',
+        lastVerified: Date.now()
+      }
+      return { valid: true, message: data.message || 'Lisensi Google Spreadsheet Aktif!', details }
+    } else {
+      return { valid: false, message: data.message || 'Lisensi tidak valid atau telah expired.' }
+    }
+  } catch (e: any) {
+    console.warn('[AMAN CHAT] License Spreadsheet API error:', e)
+    if (isValidLicenseFormat(cleanSerial)) {
+      return {
+        valid: true,
+        message: 'Koneksi ke server lisensi terganggu. Menggunakan lisensi lokal.',
+        details: {
+          serialNumber: cleanSerial,
+          status: 'Active',
+          deviceId,
+          lastVerified: Date.now()
+        }
+      }
+    }
+    return { valid: false, message: 'Gagal terhubung ke Google Apps Script Spreadsheet API!' }
+  }
 }

@@ -133,6 +133,18 @@ export interface CustomTab {
   filter?: string
 }
 
+export interface LicenseDetails {
+  serialNumber: string
+  status: 'Active' | 'Expired' | 'Revoked' | 'Inactive' | string
+  deviceId?: string
+  email?: string
+  phone?: string
+  purchaseDate?: string
+  expiryDate?: string
+  duration?: string
+  lastVerified?: number
+}
+
 export interface ExtensionState {
   privacy: PrivacySettings
   templates: Template[]
@@ -146,6 +158,7 @@ export interface ExtensionState {
   autoReplyMode: 'all' | 'keywords'
   isPremium: boolean
   licenseKey?: string
+  licenseDetails?: LicenseDetails
 }
 
 export interface WhatsAppSelectors {
