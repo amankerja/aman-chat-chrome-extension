@@ -39,7 +39,7 @@
       <textarea
         v-model="rawNumbers"
         class="ac-textarea"
-        placeholder="Masukkan nomor HP (satu nomor per baris, contoh: 628123456789)"
+        placeholder="Masukkan nomor HP (contoh: +62 822-2308-9790, 08123456789, atau dari CSV)"
         :disabled="broadcastState.status === 'sending'"
       ></textarea>
       <span class="ac-subtext">
@@ -263,7 +263,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import type { BroadcastState } from '../../types'
 import { getBroadcastState, setBroadcastState, getErrorLogs, clearErrorLogs } from '../../utils/storage'
-import { downloadCSV } from '../../utils/helpers'
+import { downloadCSV, formatPhoneNumber } from '../../utils/helpers'
 import {
   runRealBroadcast,
   pauseRealBroadcast,
@@ -336,9 +336,8 @@ const broadcastState = ref<BroadcastState>({
 
 const parsedNumbers = computed(() => {
   const raw = rawNumbers.value
-    .split('\n')
-    .map(n => n.replace(/[^0-9]/g, ''))
-    .map(n => n.startsWith('0') ? '62' + n.slice(1) : n)
+    .split(/[\n,;]+/)
+    .map(n => formatPhoneNumber(n))
     .filter(n => n.length >= 8)
 
   const seen = new Set<string>()

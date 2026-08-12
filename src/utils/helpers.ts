@@ -1,5 +1,9 @@
 export function formatPhoneNumber(phone: string): string {
-  return phone.replace(/[^0-9]/g, '')
+  const digits = phone.replace(/[^0-9]/g, '')
+  if (digits.startsWith('0')) {
+    return '62' + digits.slice(1)
+  }
+  return digits
 }
 
 export function isValidPhoneNumber(phone: string): boolean {
