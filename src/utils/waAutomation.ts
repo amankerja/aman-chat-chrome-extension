@@ -436,21 +436,25 @@ export async function openPhoneChat(phone: string): Promise<void> {
     }
   }
 
-  // METHOD 1: Direct SPA URL Router Navigation (Native WA Web Navigation)
+  // METHOD 1: Native Anchor Link Click (Triggers WhatsApp Web's internal link handler)
   try {
-    if (!window.location.search.includes(cleanPhone)) {
-      window.history.pushState({}, '', `/send?phone=${cleanPhone}`)
-      window.dispatchEvent(new PopStateEvent('popstate'))
+    let link = document.getElementById('aman-chat-direct-link') as HTMLAnchorElement | null
+    if (!link) {
+      link = document.createElement('a')
+      link.id = 'aman-chat-direct-link'
+      link.style.display = 'none'
+      document.body.appendChild(link)
+    }
+    link.href = `https://web.whatsapp.com/send?phone=${cleanPhone}`
+    link.click()
+
+    const fastComposer = await pollForElement(findComposerInput, 2000, 100)
+    if (fastComposer) {
+      console.log(`[AMAN CHAT] Successfully opened chat for ${cleanPhone} via Native Link Click.`)
+      return
     }
   } catch (err) {
-    console.warn('[AMAN CHAT] pushState failed:', err)
-  }
-
-  // Wait 600ms to see if composer input appears via direct URL navigation
-  const fastComposer = await pollForElement(findComposerInput, 1200, 100)
-  if (fastComposer) {
-    console.log(`[AMAN CHAT] Successfully opened chat for ${cleanPhone} via Direct SPA Navigation.`)
-    return
+    console.warn('[AMAN CHAT] Native link click failed:', err)
   }
 
   // METHOD 2: DOM UI Search Fallback with Lexical Paste & Expanded Search Candidates
