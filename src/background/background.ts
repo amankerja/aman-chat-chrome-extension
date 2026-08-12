@@ -36,12 +36,32 @@ chrome.runtime.onInstalled.addListener((details: chrome.runtime.InstalledDetails
   chrome.alarms.create('wku-schedule-check', { periodInMinutes: 0.5 })
 })
 
+function openOrFocusWhatsAppTab(phone?: string): void {
+  chrome.tabs.query({ url: '*://web.whatsapp.com/*' }, (tabs) => {
+    if (tabs && tabs.length > 0) {
+      const targetTab = tabs[0]
+      const tabId = targetTab.id
+      if (typeof tabId === 'number') {
+        chrome.tabs.update(tabId, { active: true })
+        if (typeof targetTab.windowId === 'number') {
+          chrome.windows.update(targetTab.windowId, { focused: true })
+        }
+        if (phone) {
+          chrome.tabs.sendMessage(tabId, { action: 'openPhoneChat', phone })
+        }
+        return
+      }
+    }
+    chrome.tabs.create({ url: 'https://web.whatsapp.com/' })
+  })
+}
+
 chrome.contextMenus.onClicked.addListener((info: chrome.contextMenus.OnClickData) => {
   if (info.menuItemId === 'wku-send-whatsapp') {
     const phone = (info.selectionText || '').replace(/[^0-9+]/g, '')
     if (phone && phone.length >= 8) {
       const cleanPhone = phone.replace(/^\+/, '')
-      chrome.tabs.create({ url: `https://web.whatsapp.com/send?phone=${cleanPhone}` })
+      openOrFocusWhatsAppTab(cleanPhone)
     }
   }
 })
@@ -59,7 +79,7 @@ chrome.action.onClicked.addListener((tab: chrome.tabs.Tab) => {
         }
       }
     } else {
-      chrome.tabs.create({ url: 'https://web.whatsapp.com/' })
+      openOrFocusWhatsAppTab()
     }
   })()
 })
@@ -95,7 +115,7 @@ chrome.runtime.onMessage.addListener((
     case 'openChat':
       if (message.phone) {
         const phone = message.phone.replace(/[^0-9]/g, '')
-        chrome.tabs.create({ url: `https://web.whatsapp.com/send?phone=${phone}` })
+        openOrFocusWhatsAppTab(phone)
       }
       break
 

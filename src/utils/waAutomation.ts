@@ -213,45 +213,111 @@ export function checkAndAutoReply(): void {
 function isElementVisible(el: HTMLElement): boolean {
   if (!el) return false
   if (el.id === 'aman-chat-sidebar' || el.closest('#aman-chat-sidebar')) return false
-  const rect = el.getBoundingClientRect()
   const style = window.getComputedStyle(el)
-  return style.display !== 'none' && style.visibility !== 'hidden' && (rect.width > 0 || rect.height > 0 || el.getClientRects().length > 0)
+  if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false
+  const rect = el.getBoundingClientRect()
+  return (rect.width > 0 || rect.height > 0 || el.offsetParent !== null)
 }
 
 function findWaSearchInput(): HTMLElement | null {
-  const selectors = [
+  // Strategy 1: Specific Lexical, drawer, and data-tab WhatsApp Web search selectors
+  const specificSelectors = [
+    'div[contenteditable="true"][data-lexical-editor="true"]',
+    'div[data-animate-drawer-title="true"] div[contenteditable="true"]',
+    'div[data-animate-drawer-title="true"] p.selectable-text',
+    'div[data-animate-drawer-title="true"] [role="textbox"]',
+    'div[data-testid="drawer-left"] div[contenteditable="true"]',
+    'div[data-testid="drawer-left"] p.selectable-text',
+    'div[data-testid="drawer-left"] [role="textbox"]',
+    'div[data-testid="chat-list-search"] div[contenteditable="true"]',
+    'div[data-testid="chat-list-search"] p.selectable-text',
+    'div[data-testid="chat-list-search"] [role="textbox"]',
     'div[contenteditable="true"][data-tab="3"]',
     'div[contenteditable="true"][data-tab="2"]',
     'div[contenteditable="true"][data-tab="1"]',
     'div[contenteditable="true"][role="textbox"]',
     'div[role="textbox"][contenteditable="true"]',
     '#side div[contenteditable="true"]',
-    '#side div[role="textbox"]',
-    'div[data-testid="chat-list-search"] div[contenteditable="true"]',
-    'div[data-testid="chat-list-search"]',
-    'div[data-animate-drawer-title="true"] div[contenteditable="true"]',
-    'div[data-animate-drawer-title="true"] p.selectable-text',
-    '#pane-side div[contenteditable="true"]',
+    '#side p.selectable-text',
+    '#side [role="textbox"]',
     'div[contenteditable="true"][title*="Search"]',
     'div[contenteditable="true"][title*="Cari"]',
     'p.selectable-text.copyable-text',
     'div[contenteditable="true"]'
   ]
 
-  for (const sel of selectors) {
+  for (const sel of specificSelectors) {
     const elements = Array.from(document.querySelectorAll(sel)) as HTMLElement[]
     for (const el of elements) {
-      if (isElementVisible(el)) {
+      if (isElementVisible(el) && !el.closest('#main') && !el.closest('footer') && !el.closest('#aman-chat-sidebar')) {
         return el
       }
     }
   }
+
+  // Strategy 2: Search by placeholder or title text ("Search name or number", "Search", "Cari")
+  const placeholderCandidates = Array.from(document.querySelectorAll(
+    '[placeholder*="Search"], [placeholder*="Cari"], ' +
+    '[title*="Search"], [title*="Cari"], ' +
+    '[aria-label*="Search"], [aria-label*="Cari"]'
+  )) as HTMLElement[]
+
+  for (const el of placeholderCandidates) {
+    if (isElementVisible(el) && !el.closest('#main') && !el.closest('footer') && !el.closest('#aman-chat-sidebar')) {
+      const target = (el.getAttribute('contenteditable') === 'true' || el.tagName === 'INPUT' || el.getAttribute('role') === 'textbox')
+        ? el
+        : (el.querySelector('div[contenteditable="true"], p.selectable-text, input, [role="textbox"]') as HTMLElement | null)
+      if (target && isElementVisible(target)) {
+        return target
+      }
+      return el
+    }
+  }
+
+  // Strategy 3: Search icon proximity in left side/drawer
+  const searchIcons = Array.from(document.querySelectorAll(
+    '#side [data-icon="search"], ' +
+    'div[data-animate-drawer-title="true"] [data-icon="search"], ' +
+    'div[data-testid="drawer-left"] [data-icon="search"], ' +
+    '[data-icon="search"]'
+  )) as HTMLElement[]
+
+  for (const icon of searchIcons) {
+    if (isElementVisible(icon) && !icon.closest('#main') && !icon.closest('#aman-chat-sidebar')) {
+      const container = icon.closest('div[role="region"], div[data-animate-drawer-title="true"], #side, div[data-testid="drawer-left"]') || icon.parentElement?.parentElement
+      if (container) {
+        const input = container.querySelector('div[contenteditable="true"], p.selectable-text, [role="textbox"], input') as HTMLElement | null
+        if (input && isElementVisible(input) && !input.closest('#main') && !input.closest('#aman-chat-sidebar')) {
+          return input
+        }
+      }
+    }
+  }
+
+  // Strategy 4: Fallback - any editable or input element in left panel outside #main / #aman-chat-sidebar / footer
+  const allEditables = Array.from(document.querySelectorAll(
+    'div[contenteditable="true"], p.selectable-text, [role="textbox"], input[type="text"]'
+  )) as HTMLElement[]
+
+  for (const el of allEditables) {
+    if (isElementVisible(el) && !el.closest('#main') && !el.closest('footer') && !el.closest('#aman-chat-sidebar')) {
+      return el
+    }
+  }
+
   return null
 }
 
 async function typeIntoSearchInput(searchInput: HTMLElement, text: string): Promise<void> {
   searchInput.focus()
   await new Promise(r => setTimeout(r, 50))
+
+  if (searchInput.tagName === 'INPUT') {
+    (searchInput as HTMLInputElement).value = text
+    searchInput.dispatchEvent(new Event('input', { bubbles: true }))
+    searchInput.dispatchEvent(new Event('change', { bubbles: true }))
+    return
+  }
 
   const selection = window.getSelection()
   const range = document.createRange()
@@ -271,9 +337,54 @@ async function typeIntoSearchInput(searchInput: HTMLElement, text: string): Prom
   searchInput.dispatchEvent(new KeyboardEvent('keyup', { key: 'a', code: 'KeyA', bubbles: true }))
 }
 
+export function dismissReloadCallsModal(): boolean {
+  const dialogs = document.querySelectorAll('div[role="dialog"], div[data-animate-modal-body="true"], [data-testid="popup-contents"]')
+  for (const dialog of Array.from(dialogs)) {
+    const text = (dialog.textContent || '').toLowerCase()
+    if (
+      text.includes('reload to restore calls') ||
+      text.includes('muat ulang untuk memulihkan panggilan') ||
+      text.includes('calling couldn\'t start') ||
+      text.includes('panggilan tidak dapat dimulai')
+    ) {
+      console.log('[AMAN CHAT] Auto-dismissing "Reload to restore calls" popup.')
+      const buttons = Array.from(dialog.querySelectorAll('button, div[role="button"]')) as HTMLElement[]
+      const notNowBtn = buttons.find(b => {
+        const btnText = (b.textContent || '').toLowerCase().trim()
+        return (
+          btnText.includes('not now') ||
+          btnText.includes('bukan sekarang') ||
+          btnText.includes('batal') ||
+          btnText.includes('cancel') ||
+          btnText.includes('nanti')
+        )
+      })
+
+      if (notNowBtn) {
+        notNowBtn.click()
+        return true
+      }
+
+      const closeBtn = (
+        dialog.querySelector('span[data-icon="x"]')?.closest('button, div[role="button"]') ||
+        dialog.querySelector('button[aria-label="Close"]') ||
+        dialog.querySelector('button[aria-label="Tutup"]')
+      ) as HTMLElement | null
+
+      if (closeBtn) {
+        closeBtn.click()
+        return true
+      }
+    }
+  }
+  return false
+}
+
 export async function openPhoneChat(phone: string): Promise<void> {
   const cleanPhone = phone.replace(/[^0-9]/g, '')
   if (!cleanPhone) return
+
+  dismissReloadCallsModal()
 
   // 0. Check if the chat for this phone is already open in composer
   const activeHeader = document.querySelector('header [title]') || document.querySelector('#main header')
@@ -333,6 +444,8 @@ export async function openPhoneChat(phone: string): Promise<void> {
   let resultClicked = false
   for (let attempt = 0; attempt < 25; attempt++) {
     await new Promise(r => setTimeout(r, 150))
+    dismissReloadCallsModal()
+
     const searchResults = Array.from(document.querySelectorAll(
       '#pane-side [role="listitem"], ' +
       '#side [role="listitem"], ' +
@@ -340,6 +453,7 @@ export async function openPhoneChat(phone: string): Promise<void> {
       '[data-testid="chat-list-item"], ' +
       '[data-testid="cell-frame-container"], ' +
       'div[role="button"][data-testid^="cell-frame"], ' +
+      'div[data-animate-drawer-title="true"] div[role="button"], ' +
       '#pane-side div[role="button"][tabindex="0"], ' +
       '#side div[role="button"][tabindex="0"]'
     )) as HTMLElement[]
@@ -354,6 +468,25 @@ export async function openPhoneChat(phone: string): Promise<void> {
     }
 
     if (resultClicked) break
+
+    // Fallback: look for any element containing the cleanPhone digits
+    const drawerOrSide = document.querySelector('div[data-animate-drawer-title="true"]') || document.querySelector('#pane-side') || document.querySelector('#side')
+    if (drawerOrSide) {
+      const candidates = Array.from(drawerOrSide.querySelectorAll('div[role="button"], [role="listitem"], span[title]')) as HTMLElement[]
+      const match = candidates.find(el => {
+        if (!isElementVisible(el)) return false
+        const t = (el.textContent || '').replace(/[^0-9]/g, '')
+        return t.includes(cleanPhone) || (cleanPhone.length >= 7 && t.includes(cleanPhone.slice(-7)))
+      })
+
+      if (match) {
+        const clickTarget = match.closest('div[role="button"]') || match.closest('[role="listitem"]') || match
+        ;(clickTarget as HTMLElement).click()
+        resultClicked = true
+        console.log(`[AMAN CHAT] Clicked matched text result for ${cleanPhone}`)
+        break
+      }
+    }
   }
 
   if (!resultClicked) {
@@ -737,14 +870,16 @@ export function initAutoReplyObserver(): void {
   isAutoReplyObserverInit = true
 
   const observer = new MutationObserver(() => {
+    dismissReloadCallsModal()
     debouncedCheck()
   })
 
   observer.observe(document.body, { childList: true, subtree: true })
 
   setInterval(() => {
+    dismissReloadCallsModal()
     checkAndAutoReply()
-  }, 5000)
+  }, 3000)
 }
 
 

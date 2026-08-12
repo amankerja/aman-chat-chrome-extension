@@ -1,6 +1,6 @@
 import { createApp, type App } from 'vue'
 import Sidebar from '../components/Sidebar.vue'
-import { initAutoReplyObserver } from '../utils/waAutomation'
+import { initAutoReplyObserver, openPhoneChat, dismissReloadCallsModal } from '../utils/waAutomation'
 import { sidebarState, toggleSidebarState, openSidebar as openSidebarState, closeSidebar } from '../utils/sidebarState'
 import { debounce } from '../utils/helpers'
 import '../content/styles.scss'
@@ -349,7 +349,7 @@ function setupMessageListener(): void {
   isMessageListenerAdded = true
 
   chrome.runtime.onMessage.addListener((
-    message: { action: string; messages?: unknown[] },
+    message: { action: string; messages?: unknown[]; phone?: string },
     _sender: chrome.runtime.MessageSender,
     sendResponse: (response?: unknown) => void
   ) => {
@@ -366,6 +366,13 @@ function setupMessageListener(): void {
       case 'sendScheduledMessages':
         if (message.messages) {
           handleScheduledMessages(message.messages)
+        }
+        sendResponse({ success: true })
+        break
+
+      case 'openPhoneChat':
+        if (message.phone) {
+          openPhoneChat(message.phone)
         }
         sendResponse({ success: true })
         break
