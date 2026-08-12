@@ -738,8 +738,7 @@ export async function sendRealMessage(text: string, typingMode: 'instant' | 'cha
       await new Promise(r => setTimeout(r, delay))
     }
   } else {
-    // Single insertion via ClipboardEvent ('paste') for Lexical, with execCommand fallback
-    let pasteWorked = false
+    // Single insertion via ClipboardEvent ('paste') for Lexical
     try {
       const dt = new DataTransfer()
       dt.setData('text/plain', text)
@@ -749,20 +748,15 @@ export async function sendRealMessage(text: string, typingMode: 'instant' | 'cha
         cancelable: true
       })
       input.dispatchEvent(pasteEvent)
-      if (input.textContent && input.textContent.trim().length > 0) {
-        pasteWorked = true
-      }
     } catch (e) {
       console.warn('[AMAN CHAT] Composer paste event error:', e)
     }
 
-    if (!pasteWorked) {
-      input.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: text }))
-      const inserted = document.execCommand('insertText', false, text)
-      if (!inserted && (!input.textContent || input.textContent.trim() === '')) {
-        input.textContent = text
-      }
-      input.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: text }))
+    await new Promise(r => setTimeout(r, 60))
+
+    // Fallback: if paste did not populate composer, use execCommand ONCE
+    if (!input.textContent || input.textContent.trim() === '') {
+      document.execCommand('insertText', false, text)
     }
   }
 
