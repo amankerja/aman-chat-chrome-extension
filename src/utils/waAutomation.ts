@@ -791,6 +791,12 @@ export function isBroadcastActuallyRunning(): boolean {
   return isBroadcastRunning
 }
 
+export interface RecipientItem {
+  phone: string
+  name?: string
+  email?: string
+}
+
 export interface BroadcastProgress {
   index: number
   total: number
@@ -800,7 +806,7 @@ export interface BroadcastProgress {
 }
 
 export interface BroadcastRunOptions {
-  numbers: string[]
+  numbers: (string | RecipientItem)[]
   message1: string
   message2?: string
   useTwoMessages: boolean
@@ -819,7 +825,7 @@ export interface BroadcastRunOptions {
 }
 
 export async function runRealBroadcast(
-  optionsOrNumbers: BroadcastRunOptions | string[],
+  optionsOrNumbers: BroadcastRunOptions | (string | RecipientItem)[],
   message1?: string,
   message2?: string,
   useTwoMessages?: boolean,
@@ -894,11 +900,21 @@ export async function runRealBroadcast(
       if (!isBroadcastRunning) return
     }
 
-    const targetPhone = numbers[i]
+    const item = numbers[i]
+    const targetPhone = typeof item === 'string' ? item : item.phone
+    const recipientName = typeof item === 'string' ? '' : (item.name || '')
+    const recipientEmail = typeof item === 'string' ? '' : (item.email || '')
+
     let currentMsg = useTwo && i % 2 === 1 && msg2 ? msg2 : msg1
     if (enableSpintax) {
       currentMsg = parseSpintax(currentMsg)
     }
+
+    // Dynamic variable replacement: {nama}, {name}, {email}, {nomor}, {phone}
+    currentMsg = currentMsg
+      .replace(/\{nama\}|\{name\}/gi, recipientName || 'Kak')
+      .replace(/\{email\}/gi, recipientEmail || '')
+      .replace(/\{nomor\}|\{phone\}/gi, targetPhone || '')
 
     let attempt = 0
     let delivered = false

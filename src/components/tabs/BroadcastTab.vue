@@ -264,6 +264,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import type { BroadcastState } from '../../types'
 import { getBroadcastState, setBroadcastState, getErrorLogs, clearErrorLogs } from '../../utils/storage'
 import { downloadCSV, formatPhoneNumber } from '../../utils/helpers'
+import type { RecipientItem } from '../../utils/waAutomation'
 import {
   runRealBroadcast,
   pauseRealBroadcast,
@@ -334,26 +335,44 @@ const broadcastState = ref<BroadcastState>({
   failedNumbers: []
 })
 
-const parsedNumbers = computed(() => {
-  const raw = rawNumbers.value
-    .split(/[\n,;]+/)
-    .map(n => formatPhoneNumber(n))
-    .filter(n => n.length >= 8)
-
+const parsedRecipients = computed<RecipientItem[]>(() => {
+  const lines = rawNumbers.value.split('\n').map(l => l.trim()).filter(Boolean)
   const seen = new Set<string>()
-  const unique: string[] = []
-  for (const n of raw) {
-    if (!seen.has(n)) {
-      seen.add(n)
-      unique.push(n)
+  const list: RecipientItem[] = []
+
+  for (const line of lines) {
+    let parts: string[] = []
+    if (line.includes('|')) {
+      parts = line.split('|').map(p => p.trim())
+    } else if (line.includes(',')) {
+      parts = line.split(',').map(p => p.trim())
+    } else {
+      parts = [line]
+    }
+
+    const phone = formatPhoneNumber(parts[0] || '')
+    if (phone.length < 8) continue
+
+    if (!seen.has(phone)) {
+      seen.add(phone)
+      list.push({
+        phone,
+        name: parts[1] || '',
+        email: parts[2] || ''
+      })
     }
   }
-  duplicateCount.value = raw.length - unique.length
-  return unique
+
+  duplicateCount.value = lines.length - list.length
+  return list
+})
+
+const parsedNumbers = computed(() => {
+  return parsedRecipients.value.map(r => r.phone)
 })
 
 const totalNumbers = computed(() => {
-  const parsedCount = parsedNumbers.value.length
+  const parsedCount = parsedRecipients.value.length
   const stateCount = broadcastState.value.numbers?.length || 0
   return parsedCount > 0 ? parsedCount : stateCount
 })
@@ -426,13 +445,35 @@ function handleCSVImport(event: Event) {
   reader.onload = (e) => {
     const text = e.target?.result as string
     if (text) {
-      const extracted = text
-        .split('\n')
-        .map(line => line.split(',')[1] || line.split(',')[0] || '')
-        .map(n => n.replace(/[^0-9]/g, ''))
-        .filter(n => n.length >= 8)
+      const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
+      const importedLines: string[] = []
 
-      rawNumbers.value = extracted.join('\n')
+      for (const line of lines) {
+        const parts = line.split(',').map(p => p.replace(/^"|"$/g, '').trim())
+        let phone = ''
+        let name = ''
+        let email = ''
+
+        if (parts[0]?.replace(/[^0-9]/g, '').length >= 8) {
+          phone = parts[0]
+          name = parts[1] || ''
+          email = parts[2] || ''
+        } else if (parts[1]?.replace(/[^0-9]/g, '').length >= 8) {
+          name = parts[0] || ''
+          phone = parts[1]
+          email = parts[2] || ''
+        }
+
+        if (phone) {
+          if (name || email) {
+            importedLines.push(`${phone}|${name}|${email}`.replace(/\|+$/, ''))
+          } else {
+            importedLines.push(phone)
+          }
+        }
+      }
+
+      rawNumbers.value = importedLines.join('\n')
       saveCurrentState()
     }
   }
@@ -457,7 +498,7 @@ function onBroadcastProgress(progress: { index: number; total: number; log: stri
 }
 
 async function startBroadcast() {
-  if (parsedNumbers.value.length === 0 || !broadcastState.value.message) return
+  if (parsedRecipients.value.length === 0 || !broadcastState.value.message) return
 
   broadcastState.value.status = 'sending'
   broadcastState.value.currentIndex = 0
@@ -466,7 +507,7 @@ async function startBroadcast() {
   await saveCurrentState()
 
   runRealBroadcast({
-    numbers: parsedNumbers.value,
+    numbers: parsedRecipients.value,
     message1: broadcastState.value.message,
     message2: broadcastState.value.message2,
     useTwoMessages: broadcastState.value.useTwoMessages,
