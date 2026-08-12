@@ -145,8 +145,25 @@ export function setTemplates(templates: Template[]): Promise<void> {
   return setStorage<Template[]>(STORAGE_KEYS.TEMPLATES, templates)
 }
 
+const DEFAULT_AUTOREPLY_RULES: AutoReplyRule[] = [
+  {
+    id: '1',
+    keywords: 'halo, hai, p, info, min, permisi',
+    reply: 'Halo kak! {sapaan}, terima kasih telah menghubungi kami. Ada yang bisa kami bantu?',
+    active: true,
+    matchType: 'contains'
+  },
+  {
+    id: '2',
+    keywords: 'harga, pricelist, berapa, biaya, ongkir',
+    reply: 'Terima kasih telah bertanya! Informasi harga dan katalog produk terbaru dapat langsung kami bantu.',
+    active: true,
+    matchType: 'contains'
+  }
+]
+
 export function getAutoReplyRules(): Promise<AutoReplyRule[]> {
-  return getStorage<AutoReplyRule[]>(STORAGE_KEYS.AUTOREPLY_RULES, [])
+  return getStorage<AutoReplyRule[]>(STORAGE_KEYS.AUTOREPLY_RULES, DEFAULT_AUTOREPLY_RULES)
 }
 
 export function setAutoReplyRules(rules: AutoReplyRule[]): Promise<void> {

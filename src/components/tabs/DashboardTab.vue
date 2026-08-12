@@ -59,6 +59,47 @@
       </div>
     </div>
 
+    <!-- Sales CRM Performance Card Grid (WhatsApp Sales CRM Positioning) -->
+    <div class="ac-card" style="background: linear-gradient(135deg, #f8fafc 0%, #eff6ff 100%); border-color: #bfdbfe;">
+      <div class="ac-section-header" style="margin-bottom: 8px;">
+        <h3 class="ac-label" style="font-weight: 700; color: #1e40af; display: flex; align-items: center; gap: 6px; margin: 0;">
+          🎯 WhatsApp Sales CRM Performance
+        </h3>
+        <span class="ac-badge" style="background: #dbeafe; color: #1e40af;">Konversi Real-time</span>
+      </div>
+
+      <div class="ac-grid-4">
+        <div class="ac-stat-card" style="background: #ffffff;">
+          <span class="ac-stat-card-title" style="font-size: 0.68rem;">Total Leads</span>
+          <div class="ac-stat-card-value" style="color: #2563eb; font-size: 1.1rem;">{{ salesAnalytics.totalLeads }}</div>
+          <span class="ac-subtext" style="font-size: 0.65rem;">Kontak Tersimpan</span>
+        </div>
+
+        <div class="ac-stat-card" style="background: #ffffff;">
+          <span class="ac-stat-card-title" style="font-size: 0.68rem;">Hot Leads 🔥</span>
+          <div class="ac-stat-card-value" style="color: #ea580c; font-size: 1.1rem;">{{ salesAnalytics.hotLeads }}</div>
+          <span class="ac-subtext" style="font-size: 0.65rem;">Siap Transaksi</span>
+        </div>
+
+        <div class="ac-stat-card" style="background: #ffffff;">
+          <span class="ac-stat-card-title" style="font-size: 0.68rem;">Customer 💰</span>
+          <div class="ac-stat-card-value" style="color: #16a34a; font-size: 1.1rem;">{{ salesAnalytics.convertedCustomers }}</div>
+          <span class="ac-subtext" style="font-size: 0.65rem;">Sudah Membeli</span>
+        </div>
+
+        <div class="ac-stat-card" style="background: #ffffff;">
+          <span class="ac-stat-card-title" style="font-size: 0.68rem;">Conversion Rate</span>
+          <div class="ac-stat-card-value" style="color: #0284c7; font-size: 1.1rem;">{{ salesAnalytics.conversionRate }}%</div>
+          <span class="ac-subtext" style="font-size: 0.65rem;">Rasio Konversi</span>
+        </div>
+      </div>
+
+      <div class="ac-grid-2" style="margin-top: 8px; font-size: 0.72rem; color: #475569;">
+        <div>⏰ <strong>Follow-up Pending:</strong> {{ salesAnalytics.pendingFollowups }} Tugas</div>
+        <div>✅ <strong>Follow-up Completed:</strong> {{ salesAnalytics.completedFollowups }} Selesai</div>
+      </div>
+    </div>
+
     <!-- Weekly 7-Day Trend Chart -->
     <div class="ac-card">
       <div class="ac-section-header">
@@ -248,6 +289,24 @@ const analytics = ref<Analytics>({
 
 const crmContacts = ref<CRMContact[]>([])
 const crmCount = computed(() => crmContacts.value.length)
+
+const salesAnalytics = computed(() => {
+  const totalLeads = crmContacts.value.length
+  const hotLeads = crmContacts.value.filter(c => (c.tags || []).some(t => t.includes('Hot') || t.includes('🔥'))).length
+  const convertedCustomers = crmContacts.value.filter(c => c.stage === 'customer' || (c.tags || []).some(t => t.includes('Beli') || t.includes('💰'))).length
+  const conversionRate = totalLeads > 0 ? Math.round((convertedCustomers / totalLeads) * 100) : 0
+  const pendingFollowups = tasks.value.filter(t => t.status === 'pending').length
+  const completedFollowups = tasks.value.filter(t => t.status === 'completed').length
+
+  return {
+    totalLeads,
+    hotLeads,
+    convertedCustomers,
+    conversionRate,
+    pendingFollowups,
+    completedFollowups
+  }
+})
 const privacyActive = ref(false)
 const showDirectChat = ref(false)
 const quickPhone = ref('')

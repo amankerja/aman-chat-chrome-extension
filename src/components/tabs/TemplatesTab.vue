@@ -52,8 +52,16 @@
         </select>
       </div>
       <div class="ac-form-group">
-        <label class="ac-label">Isi Pesan</label>
-        <textarea v-model="form.text" class="ac-textarea" placeholder="Tuliskan isi pesan template..."></textarea>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <label class="ac-label">Isi Pesan</label>
+          <span class="ac-subtext" style="font-size: 0.68rem;">Klik variabel PRO untuk menyisipkan:</span>
+        </div>
+        <div style="display: flex; gap: 4px; flex-wrap: wrap; margin: 4px 0 6px;">
+          <button v-for="v in availableVariables" :key="v" type="button" class="ac-cat-pill" style="padding: 2px 6px; font-size: 0.68rem;" @click="insertVariable(v)">
+            {{ v }}
+          </button>
+        </div>
+        <textarea v-model="form.text" class="ac-textarea" placeholder="contoh: Halo {{name}} 👋, terima kasih sudah menghubungi {{business_name}}. Produk {{product}} seharga {{price}} tersedia!"></textarea>
       </div>
       <div class="ac-grid-2">
         <button class="ac-btn primary sm" :disabled="!form.name || !form.text" @click="saveTemplate">
@@ -93,7 +101,32 @@
 import { ref, computed, onMounted } from 'vue'
 import type { Template } from '../../types'
 import { getTemplates, setTemplates } from '../../utils/storage'
-import { copyToClipboard } from '../../utils/helpers'
+import { copyToClipboard, parseTemplateVariables } from '../../utils/helpers'
+const availableVariables = [
+  '{{name}}',
+  '{{phone}}',
+  '{{product}}',
+  '{{price}}',
+  '{{agent}}',
+  '{{business_name}}',
+  '{{date}}',
+  '{{time}}'
+]
+
+function insertVariable(v: string) {
+  form.value.text += (form.value.text ? ' ' : '') + v
+}
+
+function copyText(text: string) {
+  const parsed = parseTemplateVariables(text, {
+    name: 'Budi',
+    product: 'Produk Utama',
+    price: 'Rp 150.000',
+    business_name: 'AMAN CHAT'
+  })
+  copyToClipboard(parsed)
+  alert('Teks template berhasil disalin (variabel otomatis terisi)!')
+}
 
 const templates = ref<Template[]>([])
 const searchQuery = ref('')
@@ -172,11 +205,6 @@ async function saveTemplate() {
 async function deleteTmpl(id: string) {
   templates.value = templates.value.filter(t => t.id !== id)
   await setTemplates(templates.value)
-}
-
-function copyText(text: string) {
-  copyToClipboard(text)
-  alert('Teks template berhasil disalin!')
 }
 
 onMounted(() => {

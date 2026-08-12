@@ -15,7 +15,7 @@ const STORAGE_KEYS = {
   LAST_UPDATE_CHECK: 'wku_last_update_check'
 }
 
-const DEFAULT_REPO = 'faqih/aman-chat-extension'
+const DEFAULT_REPO = 'amankerja/aman-chat-chrome-extension'
 
 export async function getGitHubRepo(): Promise<string> {
   return getStorage<string>(STORAGE_KEYS.GITHUB_REPO, DEFAULT_REPO)
@@ -72,7 +72,16 @@ export async function checkForGitHubUpdate(repoName?: string): Promise<GitHubUpd
     })
 
     if (!response.ok) {
-      throw new Error(`GitHub API HTTP ${response.status}`)
+      // Gracefully handle 404 (repo or release not created yet) without logging console.warn
+      return {
+        hasUpdate: false,
+        latestVersion: currentVersion,
+        currentVersion,
+        releaseUrl: `https://github.com/${repo}/releases`,
+        downloadUrl: '',
+        releaseNotes: '',
+        checkedAt: Date.now()
+      }
     }
 
     const data = await response.json()
@@ -100,8 +109,7 @@ export async function checkForGitHubUpdate(repoName?: string): Promise<GitHubUpd
 
     await setStorage(STORAGE_KEYS.LAST_UPDATE_CHECK, info)
     return info
-  } catch (err) {
-    console.warn('[AMAN CHAT] GitHub Update check skipped/error:', err)
+  } catch {
     const cached = await getStorage<GitHubUpdateInfo | null>(STORAGE_KEYS.LAST_UPDATE_CHECK, null)
     if (cached) return cached
     return {

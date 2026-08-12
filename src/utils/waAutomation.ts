@@ -27,21 +27,46 @@ function rememberMsgId(id: string): void {
 }
 
 function getCurrentChatKey(): string | null {
-  const header = document.querySelector('header [title]') || document.querySelector('#main header')
+  const header = document.querySelector('#main header [title]') ||
+                 document.querySelector('#main header span[dir="auto"]') ||
+                 document.querySelector('#main header') ||
+                 document.querySelector('header [title]')
   const label = header?.textContent?.trim()
   return label ? label.slice(0, 100) : null
 }
 
 function getIncomingMessageNodes(): HTMLElement[] {
-  return Array.from(
-    document.querySelectorAll('div.message-in, [class*="message-in"], div[data-id^="false_"]')
-  ) as HTMLElement[]
+  const selectors = [
+    '#main div.message-in',
+    '#main [class*="message-in"]',
+    '#main div[data-id^="false_"]',
+    '#main div[data-id*="false_"]',
+    'div.message-in',
+    '[class*="message-in"]',
+    'div[data-id^="false_"]'
+  ]
+  const nodes: HTMLElement[] = []
+  const seen = new Set<HTMLElement>()
+
+  for (const sel of selectors) {
+    const list = Array.from(document.querySelectorAll(sel)) as HTMLElement[]
+    for (const node of list) {
+      if (!seen.has(node)) {
+        seen.add(node)
+        nodes.push(node)
+      }
+    }
+  }
+  return nodes
 }
 
-function getMsgId(node: HTMLElement): string {
-  return node.getAttribute('data-id') ||
-    node.getAttribute('data-message-id') ||
-    (node.textContent || '').slice(-50)
+function getMsgId(node: HTMLElement, indexInChat: number = 0): string {
+  const container = node.closest('[data-id]') || node
+  const dataId = container.getAttribute('data-id') || container.getAttribute('data-message-id')
+  if (dataId) return dataId
+
+  const text = (node.textContent || '').trim()
+  return `${lastChatKey || 'chat'}_idx${indexInChat}_${text.slice(-40)}`
 }
 
 function matchesRuleKeyword(incomingText: string, rule: AutoReplyRule): boolean {
@@ -127,41 +152,60 @@ export function checkAndAutoReply(): void {
   getAutoReplyEnabled().then(async (enabled) => {
     if (!enabled) return
 
-    const incomingNodes = getIncomingMessageNodes()
-    if (incomingNodes.length === 0) return
-
     const chatKey = getCurrentChatKey()
     if (!chatKey) return
 
-    if (chatKey !== lastChatKey) {
+    const incomingNodes = getIncomingMessageNodes()
+    if (incomingNodes.length === 0) return
+
+    const isNewChat = chatKey !== lastChatKey
+    if (isNewChat) {
       lastChatKey = chatKey
-      for (const node of incomingNodes) {
-        rememberMsgId(getMsgId(node))
+      // Mark older incoming messages except the last one as remembered
+      for (let i = 0; i < incomingNodes.length - 1; i++) {
+        rememberMsgId(getMsgId(incomingNodes[i], i))
       }
-      return
     }
 
-    const lastMsgNode = incomingNodes[incomingNodes.length - 1]
-    const msgId = getMsgId(lastMsgNode)
+    const lastIdx = incomingNodes.length - 1
+    const lastMsgNode = incomingNodes[lastIdx]
+    const msgId = getMsgId(lastMsgNode, lastIdx)
 
     if (processedMsgIds.has(msgId)) return
 
-    rememberMsgId(msgId)
+    // Check if the last message in chat container (#main) is an incoming message
+    const allMsgNodes = Array.from(document.querySelectorAll('#main div.message-in, #main div.message-out, #main [class*="message-in"], #main [class*="message-out"]')) as HTMLElement[]
+    if (allMsgNodes.length > 0) {
+      const globalLastMsg = allMsgNodes[allMsgNodes.length - 1]
+      const isGlobalLastIncoming = globalLastMsg.classList.contains('message-in') ||
+                                   globalLastMsg.className.includes('message-in') ||
+                                   globalLastMsg.getAttribute('data-id')?.startsWith('false_') ||
+                                   globalLastMsg === lastMsgNode ||
+                                   lastMsgNode.contains(globalLastMsg)
+
+      if (!isGlobalLastIncoming) {
+        rememberMsgId(msgId)
+        return
+      }
+    }
 
     const textEl = lastMsgNode.querySelector('.selectable-text') ||
                    lastMsgNode.querySelector('.copyable-text') ||
                    lastMsgNode.querySelector('span[dir="ltr"]') ||
-                   lastMsgNode.querySelector('span[dir="rtl"]')
+                   lastMsgNode.querySelector('span[dir="rtl"]') ||
+                   lastMsgNode
 
     if (!textEl || !textEl.textContent) return
     const incomingText = textEl.textContent.trim().toLowerCase()
+    if (!incomingText) return
 
     const settings = await getAutoReplyAdvancedSettings()
     const advanced = await getAutoReplyAdvanced()
 
     const cooldownMin = settings.cooldownMinutes || advanced.cooldownMinutes || 3
     if (isContactInCooldown(chatKey, cooldownMin)) {
-      console.log(`[AMAN CHAT] Auto-reply skipped for "${chatKey}" (Cooldown active)`)
+      console.log(`[AMAN CHAT] Auto-reply skipped for "${chatKey}" (Cooldown active ${cooldownMin}m)`)
+      rememberMsgId(msgId)
       return
     }
 
@@ -174,6 +218,7 @@ export function checkAndAutoReply(): void {
         replyText = settings.outOfHoursReply
       } else {
         console.log(`[AMAN CHAT] Auto-reply skipped (Outside working hours)`)
+        rememberMsgId(msgId)
         return
       }
     } else {
@@ -198,7 +243,7 @@ export function checkAndAutoReply(): void {
 
     if (replyText) {
       replyText = applyReplyVariables(replyText)
-      console.log(`[AMAN CHAT] Smart Auto-replying to "${incomingText}" with "${replyText}"`)
+      console.log(`[AMAN CHAT] 🤖 Smart Auto-replying to "${incomingText}" with "${replyText}"`)
       updateContactCooldown(chatKey)
       await new Promise(res => setTimeout(res, 800))
       await sendRealMessage(replyText, 'instant')
@@ -1016,7 +1061,7 @@ export async function runRealBroadcast(
         onProgress({
           index: i + 1,
           total: numbers.length,
-          log: `[${formatTimestamp()}] ⏸ Jeda tambahan ${batchCooldownSeconds} detik setelah ${batchCooldownEvery} pesan (mengurangi risiko diblokir)...`
+          log: `[${formatTimestamp()}] ⏸ Jeda tambahan ${batchCooldownSeconds} detik setelah ${batchCooldownEvery} pesan (rate control batching)...`
         })
         await new Promise(r => setTimeout(r, batchCooldownSeconds * 1000))
       } else {
@@ -1062,7 +1107,36 @@ export function stopRealBroadcast(): void {
   isBroadcastPaused = false
 }
 
-const debouncedCheck = debounce(() => checkAndAutoReply(), 400)
+let isProcessingUnreadQueue = false
+
+export async function processUnreadChatsQueue(): Promise<void> {
+  if (isBroadcastRunning || isProcessingUnreadQueue) return
+  const enabled = await getAutoReplyEnabled()
+  if (!enabled) return
+
+  const unreadBadges = Array.from(document.querySelectorAll('#side [data-testid="icon-unread-count"], #side span[aria-label*="unread"], #side span[aria-label*="belum dibaca"], #side [class*="unread"]')) as HTMLElement[]
+  if (unreadBadges.length === 0) return
+
+  const targetBadge = unreadBadges[0]
+  const chatRow = (targetBadge.closest('[data-testid="chat-list-item"]') || targetBadge.closest('div[role="listitem"]') || targetBadge.closest('div[tabindex]')) as HTMLElement | null
+
+  if (chatRow && isElementVisible(chatRow)) {
+    isProcessingUnreadQueue = true
+    try {
+      console.log('[AMAN CHAT] 📩 Auto Reply Queue: Membuka chat belum dibaca secara otomatis...')
+      chatRow.click()
+      await new Promise(r => setTimeout(r, 600))
+      checkAndAutoReply()
+    } finally {
+      setTimeout(() => { isProcessingUnreadQueue = false }, 1500)
+    }
+  }
+}
+
+const debouncedCheck = debounce(() => {
+  checkAndAutoReply()
+  processUnreadChatsQueue()
+}, 400)
 let isAutoReplyObserverInit = false
 
 export function initAutoReplyObserver(): void {
@@ -1079,6 +1153,7 @@ export function initAutoReplyObserver(): void {
   setInterval(() => {
     dismissReloadCallsModal()
     checkAndAutoReply()
+    processUnreadChatsQueue()
   }, 3000)
 }
 

@@ -110,7 +110,7 @@
           <div v-else-if="onboardingStep === 3">
             <h3 class="ac-label" style="font-size: 1rem; color: #0f172a;">📢 Broadcast Massal & Spintax</h3>
             <p class="ac-subtext" style="margin-top: 6px; line-height: 1.4;">
-              Kirim pesan ke banyak nomor sekaligus langsung di WhatsApp Web tanpa reload. Gunakan fitur <strong>Spintax <code class="ac-code-font">{Halo|Selamat Pagi}</code></strong> & <strong>Pengiriman Bertahap (Batching)</strong> untuk mencegah blokir nomor.
+              Kirim pesan ke banyak nomor sekaligus langsung di WhatsApp Web tanpa reload. Gunakan fitur <strong>Spintax <code class="ac-code-font">{Halo|Selamat Pagi}</code></strong> & <strong>Pengiriman Bertahap (Smart Rate Control)</strong> untuk pengiriman berulang yang lebih terkontrol.
             </p>
           </div>
 
@@ -317,16 +317,16 @@ async function autoSyncLicense() {
     } else if (res.message && (res.message.includes('expired') || res.message.includes('tidak aktif') || res.message.includes('perangkat lain'))) {
       await setIsPremium(false)
     }
-  } catch (err) {
-    console.warn('[AMAN CHAT] Silent license auto-sync skipped:', err)
+  } catch {
+    // Silent catch if server unreachable
   }
 }
 
 async function checkUpdate() {
   try {
     updateInfo.value = await checkForGitHubUpdate()
-  } catch (err) {
-    console.warn('[AMAN CHAT] GitHub update check error:', err)
+  } catch {
+    // Silent catch if update repo not available
   }
 }
 

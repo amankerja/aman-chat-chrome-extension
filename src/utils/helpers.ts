@@ -143,3 +143,40 @@ export function parseSpintax(text: string): string {
 
   return result
 }
+
+export interface TemplateVariableData {
+  name?: string
+  phone?: string
+  product?: string
+  price?: string
+  agent?: string
+  business_name?: string
+  date?: string
+  time?: string
+}
+
+export function parseTemplateVariables(text: string, data: TemplateVariableData = {}): string {
+  if (!text) return ''
+  const now = new Date()
+  const dateStr = now.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+  const timeStr = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+
+  const map: Record<string, string> = {
+    name: data.name || 'Kak',
+    phone: data.phone || '',
+    product: data.product || 'Produk Kami',
+    price: data.price || 'Rp -',
+    agent: data.agent || 'Customer Service',
+    business_name: data.business_name || 'AMAN CHAT',
+    date: dateStr,
+    time: timeStr
+  }
+
+  let result = text
+  for (const [key, val] of Object.entries(map)) {
+    const regex = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'gi')
+    result = result.replace(regex, val)
+  }
+  return result
+}
+

@@ -100,7 +100,7 @@
       <div class="ac-form-group" style="margin-top: 10px; border-top: 1px solid #f1f5f9; padding-top: 10px;">
         <label class="ac-checkbox-label">
           <input type="checkbox" v-model="broadcastState.useBatching" />
-          ☕ Pengiriman Bertahap (Batching Anti-Blokir)
+          ☕ Pengiriman Bertahap (Batching & Rate Control)
         </label>
       </div>
 
@@ -262,7 +262,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import type { BroadcastState } from '../../types'
-import { getBroadcastState, setBroadcastState, getErrorLogs, clearErrorLogs } from '../../utils/storage'
+import { getBroadcastState, setBroadcastState, getErrorLogs, clearErrorLogs, getIsPremium } from '../../utils/storage'
 import { downloadCSV, formatPhoneNumber } from '../../utils/helpers'
 import type { RecipientItem } from '../../utils/waAutomation'
 import {
@@ -500,6 +500,14 @@ function onBroadcastProgress(progress: { index: number; total: number; log: stri
 async function startBroadcast() {
   if (parsedRecipients.value.length === 0 || !broadcastState.value.message) return
 
+  const isPro = await getIsPremium()
+  let targetRecipients = parsedRecipients.value
+
+  if (!isPro && targetRecipients.length > 5) {
+    alert(`ℹ️ Versi FREE dibatasi maksimal 5 nomor per broadcast.\n\nSistem akan mengirim ke 5 nomor pertama saja dari total ${targetRecipients.length} nomor.\n\nAktifkan Lisensi PRO di tab Pengaturan untuk pengiriman tanpa batas!`)
+    targetRecipients = targetRecipients.slice(0, 5)
+  }
+
   broadcastState.value.status = 'sending'
   broadcastState.value.currentIndex = 0
   broadcastState.value.logs = []
@@ -507,7 +515,7 @@ async function startBroadcast() {
   await saveCurrentState()
 
   runRealBroadcast({
-    numbers: parsedRecipients.value,
+    numbers: targetRecipients,
     message1: broadcastState.value.message,
     message2: broadcastState.value.message2,
     useTwoMessages: broadcastState.value.useTwoMessages,

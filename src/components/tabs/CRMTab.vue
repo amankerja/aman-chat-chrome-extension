@@ -67,6 +67,22 @@
         </div>
       </div>
       <div class="ac-form-group">
+        <label class="ac-label">Tag Smart Lead (PRO)</label>
+        <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px;">
+          <button
+            v-for="t in tagPresets"
+            :key="t"
+            type="button"
+            class="ac-cat-pill"
+            style="padding: 2px 6px; font-size: 0.68rem;"
+            @click="togglePresetTag(t)"
+          >
+            {{ t }}
+          </button>
+        </div>
+        <input v-model="form.tags" class="ac-input" placeholder="contoh: 🔥 Hot Lead, 💰 Sudah Membeli" />
+      </div>
+      <div class="ac-form-group">
         <label class="ac-label">Catatan Tambahan</label>
         <textarea v-model="form.notes" class="ac-textarea" placeholder="Tuliskan detail khusus kontak..."></textarea>
       </div>
@@ -99,6 +115,11 @@
               <div class="ac-contact-cell">
                 <span class="ac-contact-name">{{ c.name }}</span>
                 <span class="ac-contact-phone ac-code-font">{{ c.phone }}</span>
+                <div v-if="c.tags && c.tags.length > 0" style="display: flex; gap: 3px; flex-wrap: wrap; margin-top: 3px;">
+                  <span v-for="tag in c.tags" :key="tag" class="ac-badge" style="font-size: 0.62rem; padding: 1px 5px; background: #f1f5f9; color: #334155; border: 1px solid #e2e8f0;">
+                    {{ tag }}
+                  </span>
+                </div>
               </div>
             </td>
             <td>
@@ -132,6 +153,26 @@ const searchQuery = ref('')
 const stageFilter = ref('all')
 const showModal = ref(false)
 const editingId = ref<string | null>(null)
+
+const tagPresets = [
+  '🔥 Hot Lead',
+  '🟡 Warm Lead',
+  '🔵 New Lead',
+  '💰 Sudah Membeli',
+  '🔄 Follow Up',
+  '❌ Tidak Tertarik',
+  '⭐ VIP'
+]
+
+function togglePresetTag(tag: string) {
+  const currentTags = form.value.tags ? form.value.tags.split(',').map(t => t.trim()).filter(Boolean) : []
+  if (currentTags.includes(tag)) {
+    form.value.tags = currentTags.filter(t => t !== tag).join(', ')
+  } else {
+    currentTags.push(tag)
+    form.value.tags = currentTags.join(', ')
+  }
+}
 
 const form = ref({
   name: '',

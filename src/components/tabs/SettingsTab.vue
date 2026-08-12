@@ -149,12 +149,14 @@
             <button class="ac-btn secondary sm" style="padding: 2px 8px; font-size: 0.68rem;" @click="refreshLicenseData" :disabled="isVerifying">
               {{ isVerifying ? '⏳ Updating...' : '🔄 Sync Google Sheet' }}
             </button>
-            <button class="ac-btn danger sm" style="padding: 2px 6px; font-size: 0.68rem;" @click="unlinkLicense">Unlink / Hapus</button>
+            <button class="ac-btn danger sm" style="padding: 2px 8px; font-size: 0.68rem;" @click="unlinkLicense">
+              Unlink / Hapus
+            </button>
           </div>
         </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.72rem; color: #065f46;">
+        <div style="font-size: 0.72rem; color: #065f46; display: flex; flex-direction: column; gap: 4px;">
           <div><strong>Serial Number:</strong> {{ licenseDetails.serialNumber }}</div>
-          <div><strong>Status:</strong> <span class="ac-badge customer sm" style="font-size: 0.65rem;">ACTIVE</span></div>
+          <div><strong>Status:</strong> <span style="font-weight: 700; color: #047857;">{{ licenseDetails.status }}</span></div>
           <div><strong>Device ID:</strong> {{ licenseDetails.deviceId }}</div>
           <div><strong>Email:</strong> {{ licenseDetails.email || userEmailInput || '-' }}</div>
           <div><strong>No. Telepon:</strong> {{ licenseDetails.phone || userPhoneInput || '-' }}</div>
@@ -165,21 +167,104 @@
       </div>
     </div>
 
-    <!-- Data Backup & Reset Card -->
-    <div class="ac-card">
-      <h3 class="ac-label">Backup & Data Management</h3>
-      <div class="ac-grid-2">
-        <button class="ac-btn secondary sm" @click="backupData">
-          📥 Backup JSON
-        </button>
-        <label class="ac-btn secondary sm" style="cursor: pointer;">
-          📤 Restore JSON
-          <input type="file" accept=".json" style="display: none;" @change="restoreData" />
-        </label>
+    <!-- Free Tier vs Pro Feature Comparison Matrix Card -->
+    <div v-if="!isPremium" class="ac-card" style="border-color: #cbd5e1;">
+      <div class="ac-section-header" style="margin-bottom: 8px;">
+        <h3 class="ac-label" style="font-weight: 700; color: #0f172a; display: flex; align-items: center; gap: 6px; margin: 0;">
+          💳 Matriks Komparasi Fitur FREE vs PRO
+        </h3>
+        <span class="ac-badge queuing">FREE TIER</span>
       </div>
-      <button class="ac-btn danger sm" style="margin-top: 6px;" @click="resetAllData">
-        ⚠️ Reset Seluruh Data Ekstensi
-      </button>
+      <p class="ac-subtext" style="margin-bottom: 10px;">
+        Berikut adalah rincian perbedaan dan fungsi dari setiap fitur pada versi Free Tier dan Lisensi Pro:
+      </p>
+
+      <div style="overflow-x: auto;">
+        <table class="ac-table" style="font-size: 0.7rem;">
+          <thead>
+            <tr>
+              <th>Fitur & Kapabilitas</th>
+              <th style="text-align: center;">FREE</th>
+              <th style="text-align: center;">PRO</th>
+              <th>Fungsi Masing-Masing Fitur</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Kuota Broadcast</strong></td>
+              <td style="text-align: center; color: #ef4444; font-weight: 700;">5 / Sesi</td>
+              <td style="text-align: center; color: #16a34a; font-weight: 700;">Unlimited</td>
+              <td>Membatasi jumlah nomor penerima dalam satu kali sesi pengiriman broadcast massal.</td>
+            </tr>
+            <tr>
+              <td><strong>Smart Rate Control</strong></td>
+              <td style="text-align: center; color: #ef4444;">❌</td>
+              <td style="text-align: center; color: #16a34a;">✅</td>
+              <td>Mengatur jeda waktu dan pengelompokan pesan bertahap (batching) agar pengiriman teratur.</td>
+            </tr>
+            <tr>
+              <td><strong>Variasi Pesan Spintax</strong></td>
+              <td style="text-align: center; color: #ef4444;">❌</td>
+              <td style="text-align: center; color: #16a34a;">✅</td>
+              <td>Merotasi variasi kata otomatis &#123;&#123;Halo|Selamat Pagi&#125;&#125; agar kalimat pesan tidak monoton.</td>
+            </tr>
+            <tr>
+              <td><strong>Auto-Reply Bot Rules</strong></td>
+              <td style="text-align: center;">Maks 2</td>
+              <td style="text-align: center; color: #16a34a; font-weight: 700;">Unlimited</td>
+              <td>Merespon pesan pelanggan secara otomatis berdasarkan aturan kata kunci 24 jam nonstop.</td>
+            </tr>
+            <tr>
+              <td><strong>Auto-Reply Match Modes</strong></td>
+              <td style="text-align: center;">Contains</td>
+              <td style="text-align: center; color: #16a34a; font-weight: 700;">4 Mode</td>
+              <td>Pencocokan kata kunci fleksibel (Contains, Exact, StartsWith, dan Regex).</td>
+            </tr>
+            <tr>
+              <td><strong>Jam Kerja & Offline Reply</strong></td>
+              <td style="text-align: center; color: #ef4444;">❌</td>
+              <td style="text-align: center; color: #16a34a;">✅</td>
+              <td>Membatasi jam operasional balasan bot dan mengirim pesan otomatis saat toko tutup.</td>
+            </tr>
+            <tr>
+              <td><strong>Follow-up Automation</strong></td>
+              <td style="text-align: center;">5 Tugas</td>
+              <td style="text-align: center; color: #16a34a; font-weight: 700;">Unlimited + Auto-Stop</td>
+              <td>Otomasi pengingat follow-up bertahap & berhenti otomatis saat pelanggan membalas chat.</td>
+            </tr>
+            <tr>
+              <td><strong>Template Pesan Variabel</strong></td>
+              <td style="text-align: center;">5 (Statis)</td>
+              <td style="text-align: center; color: #16a34a; font-weight: 700;">Unlimited (Personal)</td>
+              <td>Template pesan dengan variabel dinamis &#123;&#123;name&#125;&#125;, &#123;&#123;product&#125;&#125;, &#123;&#123;price&#125;&#125;, dll.</td>
+            </tr>
+            <tr>
+              <td><strong>Smart Customer Tagging</strong></td>
+              <td style="text-align: center;">3 Tags</td>
+              <td style="text-align: center; color: #16a34a; font-weight: 700;">Unlimited + Auto-Tag</td>
+              <td>Penandaan lead (Hot Lead 🔥, Customer 💰) dan perpindahan otomatis stage CRM.</td>
+            </tr>
+            <tr>
+              <td><strong>Sales CRM Analytics</strong></td>
+              <td style="text-align: center;">Basic (Hari Ini)</td>
+              <td style="text-align: center; color: #16a34a; font-weight: 700;">Advanced (7/30/90 Hari)</td>
+              <td>Grafik performa sales funnel, conversion rate, dan total lead terkonversi.</td>
+            </tr>
+            <tr>
+              <td><strong>Ekspor Laporan CSV</strong></td>
+              <td style="text-align: center; color: #ef4444;">❌</td>
+              <td style="text-align: center; color: #16a34a;">✅</td>
+              <td>Mengunduh seluruh rekapitulasi data kontak, broadcast, dan bot ke dalam file CSV.</td>
+            </tr>
+            <tr>
+              <td><strong>Priority Update & Support</strong></td>
+              <td style="text-align: center; color: #ef4444;">Komunitas</td>
+              <td style="text-align: center; color: #16a34a; font-weight: 700;">Prioritas Direct</td>
+              <td>Jaminan pemeliharaan versi terbaru dan bantuan teknis langsung dari tim developer.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
     <!-- System & Software Updates Card -->
@@ -190,19 +275,12 @@
       </div>
 
       <div class="ac-form-group" style="margin-top: 6px;">
-        <label class="ac-label">Repository GitHub Update</label>
-        <div class="ac-grid-2">
-          <input
-            v-model="githubRepoInput"
-            class="ac-input"
-            placeholder="username/repo-name"
-            @change="saveGithubRepo"
-          />
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+          <span class="ac-subtext">Pemeriksaan versi terbaru secara otomatis dari server rilis.</span>
           <button class="ac-btn primary sm" @click="checkManualUpdate" :disabled="isCheckingUpdate">
-            {{ isCheckingUpdate ? '⏳ Memeriksa...' : '🔍 Cek Update' }}
+            {{ isCheckingUpdate ? '⏳ Memeriksa...' : '🔍 Cek Update Sistem' }}
           </button>
         </div>
-        <span class="ac-subtext" style="margin-top: 2px;">Ekstensi mengecek versi terbaru secara otomatis via GitHub Releases API.</span>
       </div>
 
       <div v-if="githubUpdateInfo" style="margin-top: 8px; padding: 10px; border-radius: 6px;" :style="githubUpdateInfo.hasUpdate ? 'background: #e0e7ff; border: 1px solid #a5b4fc;' : 'background: #f1f5f9; border: 1px solid #e2e8f0;'">
