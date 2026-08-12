@@ -714,6 +714,7 @@ export async function sendRealMessage(text: string, typingMode: 'instant' | 'cha
   }
 
   input.focus()
+  await new Promise(r => setTimeout(r, 50))
 
   // Fast clear leftover content
   const selection = window.getSelection()
@@ -722,22 +723,47 @@ export async function sendRealMessage(text: string, typingMode: 'instant' | 'cha
   selection?.removeAllRanges()
   selection?.addRange(range)
 
+  document.execCommand('selectAll', false)
+  document.execCommand('delete', false)
+  if (input.textContent) {
+    input.textContent = ''
+  }
+
+  await new Promise(r => setTimeout(r, 50))
+
   if (typingMode === 'character') {
-    document.execCommand('delete', false)
     for (const char of text) {
-      input.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: char }))
       document.execCommand('insertText', false, char)
-      input.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: char }))
       const delay = Math.floor(Math.random() * 20) + 10
       await new Promise(r => setTimeout(r, delay))
     }
   } else {
-    input.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: text }))
-    const inserted = document.execCommand('insertText', false, text)
-    if (!inserted || !input.textContent?.trim()) {
-      input.textContent = text
+    // Single insertion via ClipboardEvent ('paste') for Lexical, with execCommand fallback
+    let pasteWorked = false
+    try {
+      const dt = new DataTransfer()
+      dt.setData('text/plain', text)
+      const pasteEvent = new ClipboardEvent('paste', {
+        clipboardData: dt,
+        bubbles: true,
+        cancelable: true
+      })
+      input.dispatchEvent(pasteEvent)
+      if (input.textContent && input.textContent.trim().length > 0) {
+        pasteWorked = true
+      }
+    } catch (e) {
+      console.warn('[AMAN CHAT] Composer paste event error:', e)
     }
-    input.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: text }))
+
+    if (!pasteWorked) {
+      input.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: text }))
+      const inserted = document.execCommand('insertText', false, text)
+      if (!inserted && (!input.textContent || input.textContent.trim() === '')) {
+        input.textContent = text
+      }
+      input.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: text }))
+    }
   }
 
   input.dispatchEvent(new Event('change', { bubbles: true }))
