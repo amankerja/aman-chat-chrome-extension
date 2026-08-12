@@ -93,7 +93,7 @@ export function isExtensionValid(): boolean {
   }
 }
 
-function getStorage<T>(key: string, defaultValue: T): Promise<T> {
+export function getStorage<T>(key: string, defaultValue: T): Promise<T> {
   return new Promise((resolve) => {
     if (!isExtensionValid() || !chrome.storage?.local) {
       resolve(defaultValue)
@@ -113,7 +113,7 @@ function getStorage<T>(key: string, defaultValue: T): Promise<T> {
   })
 }
 
-function setStorage<T>(key: string, value: T): Promise<void> {
+export function setStorage<T>(key: string, value: T): Promise<void> {
   return new Promise((resolve) => {
     if (!isExtensionValid() || !chrome.storage?.local) {
       resolve()

@@ -175,6 +175,44 @@
       </button>
     </div>
 
+    <!-- System & Software Updates Card -->
+    <div class="ac-card">
+      <div class="ac-section-header">
+        <h3 class="ac-label">Informasi Versi & Pembaruan Sistem</h3>
+        <span class="ac-badge customer sm">v{{ currentAppVersion }}</span>
+      </div>
+
+      <div class="ac-form-group" style="margin-top: 6px;">
+        <label class="ac-label">Repository GitHub Update</label>
+        <div class="ac-grid-2">
+          <input
+            v-model="githubRepoInput"
+            class="ac-input"
+            placeholder="username/repo-name"
+            @change="saveGithubRepo"
+          />
+          <button class="ac-btn primary sm" @click="checkManualUpdate" :disabled="isCheckingUpdate">
+            {{ isCheckingUpdate ? '⏳ Memeriksa...' : '🔍 Cek Update' }}
+          </button>
+        </div>
+        <span class="ac-subtext" style="margin-top: 2px;">Ekstensi mengecek versi terbaru secara otomatis via GitHub Releases API.</span>
+      </div>
+
+      <div v-if="githubUpdateInfo" style="margin-top: 8px; padding: 10px; border-radius: 6px;" :style="githubUpdateInfo.hasUpdate ? 'background: #e0e7ff; border: 1px solid #a5b4fc;' : 'background: #f1f5f9; border: 1px solid #e2e8f0;'">
+        <div v-if="githubUpdateInfo.hasUpdate" style="font-size: 0.75rem; color: #1e1b4b;">
+          <strong>🚀 Versi Baru v{{ githubUpdateInfo.latestVersion }} Tersedia!</strong>
+          <div style="margin-top: 4px;">
+            <a :href="githubUpdateInfo.downloadUrl || githubUpdateInfo.releaseUrl" target="_blank" class="ac-btn primary sm" style="padding: 2px 8px; font-size: 0.7rem; text-decoration: none; display: inline-block;">
+              📥 Unduh Versi Terbaru (Zip)
+            </a>
+          </div>
+        </div>
+        <div v-else style="font-size: 0.75rem; color: #475569;">
+          ✅ Ekstensi Anda menggunakan versi terbaru (v{{ currentAppVersion }}).
+        </div>
+      </div>
+    </div>
+
     <!-- Log Error & Diagnostics Card -->
     <div class="ac-card">
       <div class="ac-section-header">
@@ -223,6 +261,13 @@ import {
   clearErrorLogs
 } from '../../utils/storage'
 import { verifySpreadsheetLicense } from '../../utils/licensing'
+import {
+  checkForGitHubUpdate,
+  getGitHubRepo,
+  setGitHubRepo,
+  getCurrentVersion
+} from '../../utils/githubUpdate'
+import type { GitHubUpdateInfo } from '../../utils/githubUpdate'
 
 const privacy = ref<PrivacySettings>({
   blurChats: false,
@@ -245,6 +290,25 @@ const isVerifying = ref(false)
 const newPinInput = ref('')
 const errorLogsList = ref<string[]>([])
 const copySuccess = ref(false)
+
+const currentAppVersion = ref(getCurrentVersion())
+const githubRepoInput = ref('')
+const githubUpdateInfo = ref<GitHubUpdateInfo | null>(null)
+const isCheckingUpdate = ref(false)
+
+async function saveGithubRepo() {
+  await setGitHubRepo(githubRepoInput.value)
+}
+
+async function checkManualUpdate() {
+  isCheckingUpdate.value = true
+  await saveGithubRepo()
+  try {
+    githubUpdateInfo.value = await checkForGitHubUpdate(githubRepoInput.value)
+  } finally {
+    isCheckingUpdate.value = false
+  }
+}
 
 function formatOnlyDate(val?: string): string {
   if (!val) return '-'
@@ -306,6 +370,7 @@ async function clearLogs() {
 async function loadSettings() {
   privacy.value = await getPrivacySettings()
   licenseApiUrl.value = await getLicenseApiUrl()
+  githubRepoInput.value = await getGitHubRepo()
   const key = await getLicenseKey()
   licenseKey.value = key || ''
   licenseDetails.value = await getLicenseDetails()
@@ -315,6 +380,7 @@ async function loadSettings() {
   }
   isPremium.value = await getIsPremium()
   await loadErrorLogs()
+  checkManualUpdate()
 }
 
 async function savePrivacy() {

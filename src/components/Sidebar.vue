@@ -40,6 +40,22 @@
       </div>
     </header>
 
+    <!-- GitHub Auto Update Banner -->
+    <div v-if="updateInfo && updateInfo.hasUpdate" class="ac-update-banner">
+      <div class="ac-update-banner-content">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 1.1rem;">🚀</span>
+          <div>
+            <strong style="font-size: 0.78rem; color: #1e1b4b;">Versi Baru v{{ updateInfo.latestVersion }} Tersedia!</strong>
+            <div style="font-size: 0.68rem; color: #4338ca;">Terdapat perbaikan & tampilan baru.</div>
+          </div>
+        </div>
+        <a :href="updateInfo.downloadUrl || updateInfo.releaseUrl" target="_blank" class="ac-update-btn">
+          📥 Unduh Update
+        </a>
+      </div>
+    </div>
+
     <!-- Icon Navigation Grid (2 Rows) -->
     <nav class="ac-sidebar-nav">
       <div class="ac-nav-grid">
@@ -146,6 +162,8 @@ import {
   setIsPremium
 } from '../utils/storage'
 import { verifySpreadsheetLicense } from '../utils/licensing'
+import { checkForGitHubUpdate } from '../utils/githubUpdate'
+import type { GitHubUpdateInfo } from '../utils/githubUpdate'
 import DashboardTab from './tabs/DashboardTab.vue'
 import TemplatesTab from './tabs/TemplatesTab.vue'
 import AutoReplyTab from './tabs/AutoReplyTab.vue'
@@ -157,6 +175,7 @@ const activeTab = ref('dashboard')
 const showOnboarding = ref(false)
 const onboardingStep = ref(1)
 const zoomScale = ref(1.0)
+const updateInfo = ref<GitHubUpdateInfo | null>(null)
 
 const tabs = [
   { id: 'dashboard', name: 'Dashboard', icon: '📊' },
@@ -303,11 +322,20 @@ async function autoSyncLicense() {
   }
 }
 
+async function checkUpdate() {
+  try {
+    updateInfo.value = await checkForGitHubUpdate()
+  } catch (err) {
+    console.warn('[AMAN CHAT] GitHub update check error:', err)
+  }
+}
+
 onMounted(() => {
   console.log('[AMAN CHAT] Sidebar component mounted')
   loadZoomScale()
   checkOnboarding()
   autoSyncLicense()
+  checkUpdate()
   window.addEventListener('keydown', handleGlobalKeydown)
 })
 
@@ -320,5 +348,32 @@ onUnmounted(() => {
 .ac-sidebar {
   height: calc(100vh - 44px);
   top: 44px;
+}
+
+.ac-update-banner {
+  background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+  border-bottom: 1px solid #a5b4fc;
+  padding: 8px 12px;
+}
+
+.ac-update-banner-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ac-update-btn {
+  background: #4f46e5;
+  color: #ffffff;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.ac-update-btn:hover {
+  background: #4338ca;
 }
 </style>
