@@ -345,12 +345,27 @@ async function typeIntoSearchInput(searchInput: HTMLElement, text: string): Prom
     return
   }
 
+  // 1. Select all and clear existing search text first
   const selection = window.getSelection()
   const range = document.createRange()
   range.selectNodeContents(searchInput)
   selection?.removeAllRanges()
   selection?.addRange(range)
 
+  document.execCommand('selectAll', false)
+  document.execCommand('delete', false)
+  if (searchInput.textContent) {
+    searchInput.innerText = ''
+    searchInput.textContent = ''
+  }
+
+  searchInput.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'deleteContentBackward' }))
+  searchInput.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'deleteContentBackward' }))
+
+  await new Promise(r => setTimeout(r, 50))
+
+  // 2. Insert new text
+  searchInput.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: text }))
   const inserted = document.execCommand('insertText', false, text)
   if (!inserted || !searchInput.textContent?.includes(text)) {
     searchInput.innerText = text
@@ -359,8 +374,6 @@ async function typeIntoSearchInput(searchInput: HTMLElement, text: string): Prom
 
   searchInput.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: text }))
   searchInput.dispatchEvent(new Event('change', { bubbles: true }))
-  searchInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', code: 'KeyA', bubbles: true }))
-  searchInput.dispatchEvent(new KeyboardEvent('keyup', { key: 'a', code: 'KeyA', bubbles: true }))
 }
 
 export function dismissReloadCallsModal(): boolean {
@@ -373,32 +386,15 @@ export function dismissReloadCallsModal(): boolean {
       text.includes('calling couldn\'t start') ||
       text.includes('panggilan tidak dapat dimulai')
     ) {
-      console.log('[AMAN CHAT] Auto-dismissing "Reload to restore calls" popup.')
-      const buttons = Array.from(dialog.querySelectorAll('button, div[role="button"]')) as HTMLElement[]
-      const notNowBtn = buttons.find(b => {
-        const btnText = (b.textContent || '').toLowerCase().trim()
-        return (
-          btnText.includes('not now') ||
-          btnText.includes('bukan sekarang') ||
-          btnText.includes('batal') ||
-          btnText.includes('cancel') ||
-          btnText.includes('nanti')
-        )
-      })
-
-      if (notNowBtn) {
-        notNowBtn.click()
-        return true
-      }
-
-      const closeBtn = (
-        dialog.querySelector('span[data-icon="x"]')?.closest('button, div[role="button"]') ||
-        dialog.querySelector('button[aria-label="Close"]') ||
-        dialog.querySelector('button[aria-label="Tutup"]')
+      const okBtn = (
+        dialog.querySelector('button[aria-label="OK"]') ||
+        dialog.querySelector('button[aria-label="Not now"]') ||
+        dialog.querySelector('button[aria-label="Bukan sekarang"]') ||
+        dialog.querySelector('button')
       ) as HTMLElement | null
 
-      if (closeBtn) {
-        closeBtn.click()
+      if (okBtn) {
+        okBtn.click()
         return true
       }
     }
@@ -474,50 +470,66 @@ export async function openPhoneChat(phone: string): Promise<void> {
 
   // Step 3: Type phone number into search input
   await typeIntoSearchInput(searchInput, cleanPhone)
-  await new Promise(r => setTimeout(r, 400))
+  await new Promise(r => setTimeout(r, 450))
 
-  // Step 4: Wait for search result list item that MATCHES cleanPhone, rawDigits, or significantDigits
+  // Step 4: Poll up to 35 attempts for search result matching cleanPhone, rawDigits, or significantDigits
   let resultClicked = false
 
-  for (let attempt = 0; attempt < 25; attempt++) {
+  for (let attempt = 0; attempt < 35; attempt++) {
     await new Promise(r => setTimeout(r, 150))
     dismissReloadCallsModal()
 
-    const searchContainer = (
-      document.querySelector('div[data-animate-drawer-title="true"]') ||
-      document.querySelector('div[data-testid="drawer-left"]') ||
-      document.querySelector('div[data-testid="chat-list-search"]') ||
-      document.querySelector('#pane-side') ||
-      document.querySelector('#side')
-    )
+    const searchContainers = Array.from(document.querySelectorAll(
+      'div[data-animate-drawer-title="true"], ' +
+      'div[data-testid="drawer-left"], ' +
+      'div[data-testid="chat-list-search"], ' +
+      '#pane-side, ' +
+      '#side'
+    )) as HTMLElement[]
 
-    if (searchContainer) {
-      const candidateElements = Array.from(searchContainer.querySelectorAll(
+    for (const container of searchContainers) {
+      if (!isElementVisible(container) || container.closest('#main')) continue
+
+      const candidateElements = Array.from(container.querySelectorAll(
         '[role="listitem"], ' +
-        '[data-testid="chat-list-item"], ' +
-        '[data-testid="cell-frame-container"], ' +
-        'div[role="button"][data-testid^="cell-frame"], ' +
-        'div[role="button"][tabindex="0"]'
+        '[data-testid], ' +
+        'div[role="button"], ' +
+        'div[tabindex], ' +
+        'span[title], ' +
+        'p, div'
       )) as HTMLElement[]
 
       for (const el of candidateElements) {
         if (!isElementVisible(el) || isInstallerOrDownloadElement(el) || el.closest('#main')) continue
 
         const itemText = (el.textContent || '').replace(/[^0-9]/g, '')
+        if (!itemText) continue
+
         // MULTI-FORMAT MATCH: Check cleanPhone, rawDigits, significantDigits, or targetSuffix!
         if (
           itemText.includes(cleanPhone) ||
           itemText.includes(rawDigits) ||
           (significantDigits.length >= 6 && itemText.includes(significantDigits)) ||
-          itemText.includes(targetSuffix)
+          (targetSuffix.length >= 6 && itemText.includes(targetSuffix))
         ) {
-          const clickTarget = el.closest('div[role="button"]') || el.closest('[role="listitem"]') || el
-          ;(clickTarget as HTMLElement).click()
-          resultClicked = true
-          console.log(`[AMAN CHAT] Clicked strictly matched contact search result for ${cleanPhone}`)
-          break
+          const clickTarget = (
+            el.closest('[role="listitem"]') ||
+            el.closest('div[role="button"]') ||
+            el.closest('div[tabindex]') ||
+            el.closest('div[data-testid]') ||
+            el
+          ) as HTMLElement
+
+          if (clickTarget && isElementVisible(clickTarget) && !isInstallerOrDownloadElement(clickTarget)) {
+            clickTarget.click()
+            resultClicked = true
+            console.log(`[AMAN CHAT] Clicked matched search result element for ${cleanPhone}`)
+            break
+          }
         }
       }
+
+      if (resultClicked) break
     }
 
     if (resultClicked) break
