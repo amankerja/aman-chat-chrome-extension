@@ -364,7 +364,20 @@ async function typeIntoSearchInput(searchInput: HTMLElement, text: string): Prom
 
   await new Promise(r => setTimeout(r, 50))
 
-  // 2. Insert new text
+  // 2. Insert text via ClipboardEvent ('paste') for Lexical compatibility + execCommand fallback
+  try {
+    const dt = new DataTransfer()
+    dt.setData('text/plain', text)
+    const pasteEvent = new ClipboardEvent('paste', {
+      clipboardData: dt,
+      bubbles: true,
+      cancelable: true
+    })
+    searchInput.dispatchEvent(pasteEvent)
+  } catch (e) {
+    console.warn('[AMAN CHAT] Clipboard paste event error:', e)
+  }
+
   searchInput.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: text }))
   const inserted = document.execCommand('insertText', false, text)
   if (!inserted || !searchInput.textContent?.includes(text)) {
@@ -423,7 +436,24 @@ export async function openPhoneChat(phone: string): Promise<void> {
     }
   }
 
-  // Step 1: Check if search input is ALREADY open/visible (e.g. New chat drawer is open)
+  // METHOD 1: Direct SPA URL Router Navigation (Native WA Web Navigation)
+  try {
+    if (!window.location.search.includes(cleanPhone)) {
+      window.history.pushState({}, '', `/send?phone=${cleanPhone}`)
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    }
+  } catch (err) {
+    console.warn('[AMAN CHAT] pushState failed:', err)
+  }
+
+  // Wait 600ms to see if composer input appears via direct URL navigation
+  const fastComposer = await pollForElement(findComposerInput, 1200, 100)
+  if (fastComposer) {
+    console.log(`[AMAN CHAT] Successfully opened chat for ${cleanPhone} via Direct SPA Navigation.`)
+    return
+  }
+
+  // METHOD 2: DOM UI Search Fallback with Lexical Paste & Expanded Search Candidates
   let searchInput = findWaSearchInput()
 
   if (!searchInput) {
@@ -443,101 +473,80 @@ export async function openPhoneChat(phone: string): Promise<void> {
     if (triggerBtn) {
       triggerBtn.click()
       await new Promise(r => setTimeout(r, 300))
-    }
-  }
-
-  // Step 2: Poll up to 25 times (3.75s) for search input
-  for (let attempt = 0; attempt < 25; attempt++) {
-    searchInput = findWaSearchInput()
-    if (searchInput) break
-    await new Promise(r => setTimeout(r, 150))
-  }
-
-  if (!searchInput) {
-    const sideSearchIcon = document.querySelector('#side [data-icon="search"]')?.closest('div') as HTMLElement | null
-    if (sideSearchIcon) {
-      sideSearchIcon.click()
-      await new Promise(r => setTimeout(r, 300))
       searchInput = findWaSearchInput()
     }
   }
 
-  if (!searchInput) {
-    console.error('[AMAN CHAT] Could not find WhatsApp search input element.')
-    await addErrorLog('[SEARCH ERROR] Element pencarian WhatsApp Web tidak ditemukan.')
-    return
-  }
+  if (searchInput) {
+    await typeIntoSearchInput(searchInput, cleanPhone)
+    await new Promise(r => setTimeout(r, 450))
 
-  // Step 3: Type phone number into search input
-  await typeIntoSearchInput(searchInput, cleanPhone)
-  await new Promise(r => setTimeout(r, 450))
+    let resultClicked = false
 
-  // Step 4: Poll up to 35 attempts for search result matching cleanPhone, rawDigits, or significantDigits
-  let resultClicked = false
+    for (let attempt = 0; attempt < 35; attempt++) {
+      await new Promise(r => setTimeout(r, 150))
+      dismissReloadCallsModal()
 
-  for (let attempt = 0; attempt < 35; attempt++) {
-    await new Promise(r => setTimeout(r, 150))
-    dismissReloadCallsModal()
-
-    const searchContainers = Array.from(document.querySelectorAll(
-      'div[data-animate-drawer-title="true"], ' +
-      'div[data-testid="drawer-left"], ' +
-      'div[data-testid="chat-list-search"], ' +
-      '#pane-side, ' +
-      '#side'
-    )) as HTMLElement[]
-
-    for (const container of searchContainers) {
-      if (!isElementVisible(container) || container.closest('#main')) continue
-
-      const candidateElements = Array.from(container.querySelectorAll(
-        '[role="listitem"], ' +
-        '[data-testid], ' +
-        'div[role="button"], ' +
-        'div[tabindex], ' +
-        'span[title], ' +
-        'p, div'
+      const searchContainers = Array.from(document.querySelectorAll(
+        'div[data-animate-drawer-title="true"], ' +
+        'div[data-testid="drawer-left"], ' +
+        'div[data-testid="chat-list-search"], ' +
+        '#pane-side, ' +
+        '#side'
       )) as HTMLElement[]
 
-      for (const el of candidateElements) {
-        if (!isElementVisible(el) || isInstallerOrDownloadElement(el) || el.closest('#main')) continue
+      for (const container of searchContainers) {
+        if (!isElementVisible(container) || container.closest('#main')) continue
 
-        const itemText = (el.textContent || '').replace(/[^0-9]/g, '')
-        if (!itemText) continue
+        const candidateElements = Array.from(container.querySelectorAll(
+          '[role="listitem"], ' +
+          '[data-testid], ' +
+          'div[role="button"], ' +
+          'div[tabindex], ' +
+          'span[title], ' +
+          'p, div'
+        )) as HTMLElement[]
 
-        // MULTI-FORMAT MATCH: Check cleanPhone, rawDigits, significantDigits, or targetSuffix!
-        if (
-          itemText.includes(cleanPhone) ||
-          itemText.includes(rawDigits) ||
-          (significantDigits.length >= 6 && itemText.includes(significantDigits)) ||
-          (targetSuffix.length >= 6 && itemText.includes(targetSuffix))
-        ) {
-          const clickTarget = (
-            el.closest('[role="listitem"]') ||
-            el.closest('div[role="button"]') ||
-            el.closest('div[tabindex]') ||
-            el.closest('div[data-testid]') ||
-            el
-          ) as HTMLElement
+        for (const el of candidateElements) {
+          if (!isElementVisible(el) || isInstallerOrDownloadElement(el) || el.closest('#main')) continue
 
-          if (clickTarget && isElementVisible(clickTarget) && !isInstallerOrDownloadElement(clickTarget)) {
-            clickTarget.click()
-            resultClicked = true
-            console.log(`[AMAN CHAT] Clicked matched search result element for ${cleanPhone}`)
-            break
+          const itemText = (el.textContent || '').replace(/[^0-9]/g, '')
+          if (!itemText) continue
+
+          // MULTI-FORMAT MATCH: Check cleanPhone, rawDigits, significantDigits, or targetSuffix!
+          if (
+            itemText.includes(cleanPhone) ||
+            itemText.includes(rawDigits) ||
+            (significantDigits.length >= 6 && itemText.includes(significantDigits)) ||
+            (targetSuffix.length >= 6 && itemText.includes(targetSuffix))
+          ) {
+            const clickTarget = (
+              el.closest('[role="listitem"]') ||
+              el.closest('div[role="button"]') ||
+              el.closest('div[tabindex]') ||
+              el.closest('div[data-testid]') ||
+              el
+            ) as HTMLElement
+
+            if (clickTarget && isElementVisible(clickTarget) && !isInstallerOrDownloadElement(clickTarget)) {
+              clickTarget.click()
+              resultClicked = true
+              console.log(`[AMAN CHAT] Clicked matched search result element for ${cleanPhone}`)
+              break
+            }
           }
         }
+
+        if (resultClicked) break
       }
 
       if (resultClicked) break
     }
 
-    if (resultClicked) break
-  }
-
-  if (!resultClicked) {
-    console.warn(`[AMAN CHAT] No matching search result clicked for number: ${cleanPhone}`)
-    await addErrorLog(`[SEARCH WARN] Kontak / nomor ${cleanPhone} (asal: ${rawDigits}) tidak ditemukan di hasil pencarian.`)
+    if (!resultClicked) {
+      console.warn(`[AMAN CHAT] No matching search result clicked for number: ${cleanPhone}`)
+      await addErrorLog(`[SEARCH WARN] Kontak / nomor ${cleanPhone} (asal: ${rawDigits}) tidak ditemukan di hasil pencarian.`)
+    }
   }
 }
 
