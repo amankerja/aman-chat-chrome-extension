@@ -151,9 +151,9 @@
           <div><strong>Device ID:</strong> {{ licenseDetails.deviceId }}</div>
           <div><strong>Email:</strong> {{ licenseDetails.email || userEmailInput || '-' }}</div>
           <div><strong>No. Telepon:</strong> {{ licenseDetails.phone || userPhoneInput || '-' }}</div>
-          <div><strong>Tanggal Beli:</strong> {{ licenseDetails.purchaseDate || 'Tercatat di Server' }}</div>
-          <div><strong>Masa Aktif (Durasi):</strong> <span style="font-weight: 700; color: #047857;">{{ licenseDetails.duration || 'Aktif' }}</span></div>
-          <div><strong>Tanggal Expired:</strong> <span style="font-weight: 700; color: #047857;">{{ licenseDetails.expiryDate || 'Lifetime / Aktif' }}</span></div>
+          <div><strong>Tanggal Beli:</strong> {{ formatOnlyDate(licenseDetails.purchaseDate) }}</div>
+          <div><strong>Masa Aktif (Durasi):</strong> <span style="font-weight: 700; color: #047857;">{{ formatDuration(licenseDetails.duration) }}</span></div>
+          <div><strong>Tanggal Expired:</strong> <span style="font-weight: 700; color: #047857;">{{ formatOnlyDate(licenseDetails.expiryDate) }}</span></div>
         </div>
       </div>
     </div>
@@ -245,6 +245,40 @@ const isVerifying = ref(false)
 const newPinInput = ref('')
 const errorLogsList = ref<string[]>([])
 const copySuccess = ref(false)
+
+function formatOnlyDate(val?: string): string {
+  if (!val) return '-'
+  const str = String(val).trim()
+  if (!str) return '-'
+
+  // If already simple format like 9/12/2026 or 09/12/2026
+  const match = str.match(/(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})/)
+  if (match && match[1]) {
+    return match[1]
+  }
+
+  // Parse Date object if GMT / ISO format string
+  const d = new Date(str)
+  if (!isNaN(d.getTime()) && d.getFullYear() > 1970) {
+    const day = String(d.getDate()).padStart(2, '0')
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const year = d.getFullYear()
+    return `${day}/${month}/${year}`
+  }
+
+  return str.split(' ')[0] || str
+}
+
+function formatDuration(val?: string | number): string {
+  if (val === undefined || val === null || val === '') return 'Aktif'
+  const str = String(val).trim()
+  if (!str) return 'Aktif'
+
+  if (/^\d+$/.test(str)) {
+    return `${str} Bulan`
+  }
+  return str
+}
 
 async function loadErrorLogs() {
   errorLogsList.value = await getErrorLogs()
