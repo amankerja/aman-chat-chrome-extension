@@ -670,6 +670,9 @@ export function waitForChatReadyOrError(timeoutMs: number = 5000): Promise<ChatR
           text.includes('invalid') ||
           text.includes('tidak terdaftar') ||
           text.includes('not on whatsapp') ||
+          text.includes("isn't on whatsapp") ||
+          text.includes('is not on whatsapp') ||
+          text.includes("isn't on") ||
           text.includes('tautan tidak valid')
         ) {
           clearInterval(interval)
@@ -910,12 +913,13 @@ export async function runRealBroadcast(
       currentMsg = parseSpintax(currentMsg)
     }
 
-    // Dynamic variable replacement: supports {nama}, [nama], {name}, [name], {email}, [email], {nomor}, [nomor], {phone}, [phone]
+    // Dynamic variable replacement: supports {nama}, [nama], \bnama\b, {name}, [name], \bname\b, {email}, [email], {nomor}, [nomor], {phone}
     currentMsg = currentMsg
-      .replace(/\{nama\}|\[nama\]|\{name\}|\[name\]/gi, recipientName || '')
-      .replace(/\{email\}|\[email\]/gi, recipientEmail || '')
+      .replace(/\{nama\}|\[nama\]|\bnama\b|\{name\}|\[name\]|\bname\b/gi, recipientName || '')
+      .replace(/\{email\}|\[email\]|\bemail\b/gi, recipientEmail || '')
       .replace(/\{nomor\}|\[nomor\]|\{phone\}|\[phone\]/gi, targetPhone || '')
       .replace(/  +/g, ' ')
+      .replace(/ ,/g, ',')
 
     let attempt = 0
     let delivered = false
