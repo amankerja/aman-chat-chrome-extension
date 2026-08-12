@@ -134,7 +134,18 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { sidebarState, closeSidebar, toggleSidebarState } from '../utils/sidebarState'
-import { getPrivacySettings, setPrivacySettings, getZoomScale, setZoomScale } from '../utils/storage'
+import {
+  getPrivacySettings,
+  setPrivacySettings,
+  getZoomScale,
+  setZoomScale,
+  getLicenseKey,
+  getLicenseApiUrl,
+  getLicenseDetails,
+  setLicenseDetails,
+  setIsPremium
+} from '../utils/storage'
+import { verifySpreadsheetLicense } from '../utils/licensing'
 import DashboardTab from './tabs/DashboardTab.vue'
 import TemplatesTab from './tabs/TemplatesTab.vue'
 import AutoReplyTab from './tabs/AutoReplyTab.vue'
@@ -269,10 +280,34 @@ function handleGlobalKeydown(e: KeyboardEvent) {
   }
 }
 
+async function autoSyncLicense() {
+  try {
+    const key = await getLicenseKey()
+    if (!key) return
+    const apiUrl = await getLicenseApiUrl()
+    const details = await getLicenseDetails()
+    const res = await verifySpreadsheetLicense(
+      key,
+      details?.email || '',
+      details?.phone || '',
+      apiUrl
+    )
+    if (res.valid && res.details) {
+      await setLicenseDetails(res.details)
+      await setIsPremium(true)
+    } else if (res.message && (res.message.includes('expired') || res.message.includes('tidak aktif') || res.message.includes('perangkat lain'))) {
+      await setIsPremium(false)
+    }
+  } catch (err) {
+    console.warn('[AMAN CHAT] Silent license auto-sync skipped:', err)
+  }
+}
+
 onMounted(() => {
   console.log('[AMAN CHAT] Sidebar component mounted')
   loadZoomScale()
   checkOnboarding()
+  autoSyncLicense()
   window.addEventListener('keydown', handleGlobalKeydown)
 })
 
