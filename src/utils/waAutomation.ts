@@ -535,6 +535,9 @@ function isButtonDisabled(btn: HTMLElement): boolean {
 }
 
 function findSendButton(): HTMLElement | null {
+  const footer = document.querySelector('#main footer') || document.querySelector('footer')
+  if (!footer) return null
+
   const iconOrButtonSelectors = [
     '[data-testid="compose-btn-send"]',
     'button[aria-label="Kirim"]',
@@ -547,7 +550,7 @@ function findSendButton(): HTMLElement | null {
   ]
 
   for (const sel of iconOrButtonSelectors) {
-    const el = document.querySelector(sel) as HTMLElement | null
+    const el = footer.querySelector(sel) as HTMLElement | null
     if (!el) continue
     const btn = (el.tagName === 'BUTTON' || el.getAttribute('role') === 'button')
       ? el
@@ -557,20 +560,15 @@ function findSendButton(): HTMLElement | null {
     }
   }
 
-  // Fallback: the compose bar's own footer usually only has 1-2 icon
-  // buttons (attach / emoji / send) — take the last enabled one, which is
-  // almost always the send action once text has been typed.
-  const footer = document.querySelector('footer')
-  if (footer) {
-    const buttons = Array.from(footer.querySelectorAll('button, div[role="button"]')) as HTMLElement[]
-    const usable = buttons.filter(b => isElementVisible(b) && !isButtonDisabled(b))
-    if (usable.length > 0) return usable[usable.length - 1]
-  }
+  // Fallback: take the last enabled button in footer (almost always send button after typing)
+  const buttons = Array.from(footer.querySelectorAll('button, div[role="button"]')) as HTMLElement[]
+  const usable = buttons.filter(b => isElementVisible(b) && !isButtonDisabled(b) && !b.closest('#aman-chat-sidebar'))
+  if (usable.length > 0) return usable[usable.length - 1]
 
   return null
 }
 
-async function pollForElement(finder: () => HTMLElement | null, timeoutMs: number, intervalMs = 150): Promise<HTMLElement | null> {
+async function pollForElement(finder: () => HTMLElement | null, timeoutMs: number, intervalMs = 50): Promise<HTMLElement | null> {
   const start = Date.now()
   while (Date.now() - start < timeoutMs) {
     const el = finder()
@@ -580,7 +578,7 @@ async function pollForElement(finder: () => HTMLElement | null, timeoutMs: numbe
   return finder()
 }
 
-async function pollForCondition(check: () => boolean, timeoutMs: number, intervalMs = 150): Promise<boolean> {
+async function pollForCondition(check: () => boolean, timeoutMs: number, intervalMs = 50): Promise<boolean> {
   const start = Date.now()
   while (Date.now() - start < timeoutMs) {
     if (check()) return true
@@ -594,7 +592,7 @@ export interface ChatReadyResult {
   reason?: 'invalid_number' | 'timeout'
 }
 
-export function waitForChatReadyOrError(timeoutMs: number = 12000): Promise<ChatReadyResult> {
+export function waitForChatReadyOrError(timeoutMs: number = 5000): Promise<ChatReadyResult> {
   return new Promise((resolve) => {
     const startTime = Date.now()
 
@@ -641,14 +639,13 @@ export function waitForChatReadyOrError(timeoutMs: number = 12000): Promise<Chat
         clearInterval(interval)
         resolve({ success: false, reason: 'timeout' })
       }
-    }, 350)
+    }, 100)
   })
 }
 
 export async function sendRealMessage(text: string, typingMode: 'instant' | 'character' = 'instant'): Promise<boolean> {
-  // Poll instead of a single querySelector — right after switching chats the
-  // composer can take a beat to mount, and a one-shot lookup was racing that.
-  const input = await pollForElement(findComposerInput, 5000, 200)
+  // Fast poll for composer input in footer
+  const input = await pollForElement(findComposerInput, 2500, 50)
 
   if (!input) {
     console.error('[AMAN CHAT] Composer input element not found!')
@@ -656,10 +653,8 @@ export async function sendRealMessage(text: string, typingMode: 'instant' | 'cha
   }
 
   input.focus()
-  await new Promise(r => setTimeout(r, 50))
 
-  // Select any existing/leftover content so insertText replaces it instead
-  // of appending after it (a previous failed send could leave stray text).
+  // Fast clear leftover content
   const selection = window.getSelection()
   const range = document.createRange()
   range.selectNodeContents(input)
@@ -672,31 +667,26 @@ export async function sendRealMessage(text: string, typingMode: 'instant' | 'cha
       input.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: char }))
       document.execCommand('insertText', false, char)
       input.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: char }))
-      const delay = Math.floor(Math.random() * 30) + 15
+      const delay = Math.floor(Math.random() * 20) + 10
       await new Promise(r => setTimeout(r, delay))
     }
   } else {
     input.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: text }))
     const inserted = document.execCommand('insertText', false, text)
     if (!inserted || !input.textContent?.trim()) {
-      // Last-resort fallback so the message still goes out even if
-      // execCommand silently no-ops on this WA Web build.
       input.textContent = text
     }
     input.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText', data: text }))
   }
 
   input.dispatchEvent(new Event('change', { bubbles: true }))
-  await new Promise(r => setTimeout(r, 350))
+  await new Promise(r => setTimeout(r, 100))
 
-  const sendBtn = await pollForElement(findSendButton, 2000, 150)
+  const sendBtn = await pollForElement(findSendButton, 800, 40)
 
   if (sendBtn && !isButtonDisabled(sendBtn)) {
     sendBtn.click()
   } else {
-    // Fallback: dispatch the full keydown/keypress/keyup trio. Some WA Web
-    // builds only register a send on keypress, not keydown alone, which is
-    // all the old code sent.
     for (const type of ['keydown', 'keypress', 'keyup'] as const) {
       input.dispatchEvent(new KeyboardEvent(type, {
         key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true
@@ -704,12 +694,7 @@ export async function sendRealMessage(text: string, typingMode: 'instant' | 'cha
     }
   }
 
-  // Previously this function returned true unconditionally the moment a
-  // send button/Enter was *attempted* — even a disabled/missing button
-  // still counted as "sent", so failed sends were silently logged as
-  // successes. Now we confirm the composer actually emptied out before
-  // reporting success, and let the caller retry otherwise.
-  const cleared = await pollForCondition(() => !input.textContent || input.textContent.trim() === '', 3000, 150)
+  const cleared = await pollForCondition(() => !input.textContent || input.textContent.trim() === '', 1000, 50)
   if (!cleared) {
     console.warn('[AMAN CHAT] Send may have failed — composer still has text after send attempt.')
   }
