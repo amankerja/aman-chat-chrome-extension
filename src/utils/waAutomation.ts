@@ -7,7 +7,8 @@ import {
   setAnalytics,
   getAnalytics,
   isExtensionValid,
-  bumpDailyStat
+  bumpDailyStat,
+  addErrorLog
 } from './storage'
 import { formatTimestamp, debounce, parseSpintax } from './helpers'
 import type { AutoReplyRule, AutoReplySettings } from '../types'
@@ -434,6 +435,7 @@ export async function openPhoneChat(phone: string): Promise<void> {
 
   if (!searchInput) {
     console.error('[AMAN CHAT] Could not find WhatsApp search input element.')
+    await addErrorLog('[SEARCH ERROR] Element pencarian WhatsApp Web tidak ditemukan.')
     return
   }
 
@@ -491,6 +493,7 @@ export async function openPhoneChat(phone: string): Promise<void> {
 
   if (!resultClicked) {
     console.warn(`[AMAN CHAT] No search result clicked for number: ${cleanPhone}`)
+    await addErrorLog(`[SEARCH WARN] Kontak / nomor ${cleanPhone} tidak ditemukan di hasil pencarian.`)
   }
 }
 
@@ -649,6 +652,7 @@ export async function sendRealMessage(text: string, typingMode: 'instant' | 'cha
 
   if (!input) {
     console.error('[AMAN CHAT] Composer input element not found!')
+    await addErrorLog('[COMPOSER ERROR] Kotak penulisan pesan (footer composer) tidak ditemukan.')
     return false
   }
 
@@ -697,6 +701,7 @@ export async function sendRealMessage(text: string, typingMode: 'instant' | 'cha
   const cleared = await pollForCondition(() => !input.textContent || input.textContent.trim() === '', 1000, 50)
   if (!cleared) {
     console.warn('[AMAN CHAT] Send may have failed — composer still has text after send attempt.')
+    await addErrorLog('[SEND WARN] Pesan kemungkinan belum terkirim — kotak input pesan masih terisi setelah ditekan Kirim.')
   }
   return cleared
 }

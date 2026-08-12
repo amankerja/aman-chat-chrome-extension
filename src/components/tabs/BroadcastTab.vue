@@ -204,15 +204,55 @@
       </div>
     </div>
 
-    <!-- Real Execution Logs -->
-    <div class="ac-card" v-if="broadcastState.logs.length > 0">
+    <!-- Real Execution Logs & Error Log Card -->
+    <div class="ac-card">
       <div class="ac-section-header">
-        <h3 class="ac-label">Log Riwayat Real Broadcast</h3>
-        <button class="ac-btn secondary sm" @click="downloadLogs">Export Log</button>
+        <h3 class="ac-label">Log Riwayat & Error System</h3>
+        <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+          <button class="ac-btn secondary sm" @click="copyAllLogs">
+            {{ copySuccess ? '✅ Disalin!' : '📋 Salin Log' }}
+          </button>
+          <button class="ac-btn secondary sm" @click="downloadLogs">📥 Export</button>
+          <button class="ac-btn primary sm" @click="openErrorLogModal">🚨 Log Error</button>
+        </div>
       </div>
-      <div class="ac-log-box ac-code-font">
+      <div class="ac-log-box ac-code-font" v-if="broadcastState.logs.length > 0">
         <div v-for="(log, idx) in broadcastState.logs" :key="idx" class="ac-log-line">
           {{ log }}
+        </div>
+      </div>
+      <div v-else class="ac-subtext" style="padding: 4px 0;">
+        Belum ada log broadcast aktif. Klik <strong>🚨 Log Error</strong> untuk melihat & menyalin riwayat error sistem.
+      </div>
+    </div>
+
+    <!-- Modal Viewer Log Error & Debugging -->
+    <div v-if="showErrorModal" class="ac-modal-overlay" @click.self="showErrorModal = false">
+      <div class="ac-modal-content">
+        <div class="ac-section-header" style="margin-bottom: 8px;">
+          <h3 class="ac-label" style="font-size: 0.92rem; display: flex; align-items: center; gap: 6px; margin: 0;">
+            📋 Log Error & Diagnostik Sistem
+          </h3>
+          <button class="ac-btn secondary sm" @click="showErrorModal = false">✕ Tutup</button>
+        </div>
+        <p class="ac-subtext" style="margin-bottom: 8px;">
+          Di bawah ini adalah riwayat lengkap log error dan aktivitas. Anda dapat mengklik <strong>Salin Log Error</strong> untuk menyalinnya langsung ke clipboard.
+        </p>
+
+        <textarea
+          readonly
+          v-model="fullLogText"
+          class="ac-textarea ac-code-font"
+          style="height: 180px; font-size: 0.72rem; background: #0f172a; color: #38bdf8; resize: vertical; line-height: 1.4; width: 100%; box-sizing: border-box;"
+        ></textarea>
+
+        <div style="display: flex; gap: 6px; margin-top: 10px; justify-content: space-between; align-items: center;">
+          <button class="ac-btn primary sm" @click="copyAllLogs">
+            {{ copySuccess ? '✅ Log Berhasil Disalin!' : '📋 Salin Semua Log Error' }}
+          </button>
+          <button class="ac-btn danger sm" @click="handleClearErrorLogs">
+            🗑️ Hapus Log Error
+          </button>
         </div>
       </div>
     </div>
@@ -222,7 +262,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import type { BroadcastState } from '../../types'
-import { getBroadcastState, setBroadcastState } from '../../utils/storage'
+import { getBroadcastState, setBroadcastState, getErrorLogs, clearErrorLogs } from '../../utils/storage'
 import { downloadCSV } from '../../utils/helpers'
 import {
   runRealBroadcast,
@@ -233,6 +273,43 @@ import {
 } from '../../utils/waAutomation'
 
 const rawNumbers = ref('')
+const showErrorModal = ref(false)
+const errorLogs = ref<string[]>([])
+const copySuccess = ref(false)
+
+async function loadErrorLogs() {
+  errorLogs.value = await getErrorLogs()
+}
+
+const fullLogText = computed(() => {
+  const bLogs = broadcastState.value.logs || []
+  const errs = errorLogs.value || []
+  const lines = [
+    '=== LOG BROADCAST & REAL EXECUTION ===',
+    ...(bLogs.length > 0 ? bLogs : ['(Belum ada log broadcast saat ini)']),
+    '',
+    '=== LOG ERROR & SYSTEM DIAGNOSTICS ===',
+    ...(errs.length > 0 ? errs : ['(Belum ada error yang terdeteksi)'])
+  ]
+  return lines.join('\n')
+})
+
+function copyAllLogs() {
+  navigator.clipboard.writeText(fullLogText.value).then(() => {
+    copySuccess.value = true
+    setTimeout(() => { copySuccess.value = false }, 2500)
+  })
+}
+
+async function handleClearErrorLogs() {
+  await clearErrorLogs()
+  errorLogs.value = []
+}
+
+function openErrorLogModal() {
+  loadErrorLogs()
+  showErrorModal.value = true
+}
 const showResumeBanner = ref(false)
 const duplicateCount = ref(0)
 
@@ -548,6 +625,28 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+.ac-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(3px);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+.ac-modal-content {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 14px;
+  width: 100%;
+  max-width: 380px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.08);
 }
 </style>
 

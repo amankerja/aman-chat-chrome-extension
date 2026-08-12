@@ -286,6 +286,23 @@ export function setZoomScale(scale: number): Promise<void> {
   return setStorage<number>('wku_zoom_scale', scale)
 }
 
+export function getErrorLogs(): Promise<string[]> {
+  return getStorage<string[]>('wku_error_logs', [])
+}
+
+export async function addErrorLog(message: string): Promise<void> {
+  const logs = await getErrorLogs()
+  const now = new Date()
+  const timestamp = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`
+  logs.push(`[${timestamp}] ${message}`)
+  if (logs.length > 200) logs.shift()
+  await setStorage('wku_error_logs', logs)
+}
+
+export function clearErrorLogs(): Promise<void> {
+  return setStorage<string[]>('wku_error_logs', [])
+}
+
 export async function initializeStorage(): Promise<void> {
   const privacy = await getPrivacySettings()
   await setPrivacySettings(privacy)

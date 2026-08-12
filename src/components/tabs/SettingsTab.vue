@@ -126,6 +126,28 @@
       </button>
     </div>
 
+    <!-- Log Error & Diagnostics Card -->
+    <div class="ac-card">
+      <div class="ac-section-header">
+        <h3 class="ac-label">Log Error & Diagnostik</h3>
+        <button class="ac-btn primary sm" @click="copyErrorLogs">
+          {{ copySuccess ? '✅ Disalin!' : '📋 Salin Log Error' }}
+        </button>
+      </div>
+      <p class="ac-subtext" style="margin-bottom: 8px;">
+        Riwayat error sistem otomatis tercatat di bawah ini. Anda dapat menyalin log ini jika membutuhkan bantuan teknis.
+      </p>
+      <textarea
+        readonly
+        v-model="formattedErrorLogs"
+        class="ac-textarea ac-code-font"
+        style="height: 120px; font-size: 0.72rem; background: #0f172a; color: #38bdf8; resize: vertical; width: 100%; box-sizing: border-box;"
+      ></textarea>
+      <div style="display: flex; gap: 6px; margin-top: 6px; justify-content: flex-end;">
+        <button class="ac-btn danger sm" @click="clearLogs">🗑️ Hapus Log Error</button>
+      </div>
+    </div>
+
     <!-- Version Info Footer -->
     <div class="ac-card" style="text-align: center;">
       <span class="ac-label">AMAN CHAT Extension v3.0.0</span>
@@ -135,7 +157,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import type { PrivacySettings } from '../../types'
 import {
   getPrivacySettings,
@@ -143,9 +165,10 @@ import {
   getLicenseKey,
   setLicenseKey,
   getIsPremium,
-  setIsPremium
+  setIsPremium,
+  getErrorLogs,
+  clearErrorLogs
 } from '../../utils/storage'
-import { downloadCSV } from '../../utils/helpers'
 import { verifyLicenseKey } from '../../utils/licensing'
 
 const privacy = ref<PrivacySettings>({
@@ -162,12 +185,38 @@ const privacy = ref<PrivacySettings>({
 const licenseKey = ref('')
 const isPremium = ref(false)
 const newPinInput = ref('')
+const errorLogsList = ref<string[]>([])
+const copySuccess = ref(false)
+
+async function loadErrorLogs() {
+  errorLogsList.value = await getErrorLogs()
+}
+
+const formattedErrorLogs = computed(() => {
+  if (errorLogsList.value.length === 0) {
+    return '(Belum ada log error yang terdeteksi)'
+  }
+  return errorLogsList.value.join('\n')
+})
+
+function copyErrorLogs() {
+  navigator.clipboard.writeText(formattedErrorLogs.value).then(() => {
+    copySuccess.value = true
+    setTimeout(() => { copySuccess.value = false }, 2000)
+  })
+}
+
+async function clearLogs() {
+  await clearErrorLogs()
+  errorLogsList.value = []
+}
 
 async function loadSettings() {
   privacy.value = await getPrivacySettings()
   const key = await getLicenseKey()
   licenseKey.value = key || ''
   isPremium.value = await getIsPremium()
+  await loadErrorLogs()
 }
 
 async function savePrivacy() {
