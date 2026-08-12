@@ -140,14 +140,15 @@
           <span class="ac-label" style="font-size: 0.8rem; color: #047857;">🎉 Detail Aktivasi Lisensi Premium</span>
           <button class="ac-btn danger sm" style="padding: 2px 6px; font-size: 0.68rem;" @click="unlinkLicense">Unlink / Hapus</button>
         </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 0.72rem; color: #065f46;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.72rem; color: #065f46;">
           <div><strong>Serial Number:</strong> {{ licenseDetails.serialNumber }}</div>
           <div><strong>Status:</strong> <span class="ac-badge customer sm" style="font-size: 0.65rem;">ACTIVE</span></div>
           <div><strong>Device ID:</strong> {{ licenseDetails.deviceId }}</div>
           <div><strong>Email:</strong> {{ licenseDetails.email || userEmailInput || '-' }}</div>
           <div><strong>No. Telepon:</strong> {{ licenseDetails.phone || userPhoneInput || '-' }}</div>
-          <div><strong>Tanggal Beli:</strong> {{ licenseDetails.purchaseDate || 'Otomatis Server' }}</div>
-          <div><strong>Masa Aktif:</strong> <span style="font-weight: 700; color: #047857;">{{ licenseDetails.expiryDate || 'Aktif' }} ({{ licenseDetails.duration || 'Resmi' }})</span></div>
+          <div><strong>Tanggal Beli:</strong> {{ licenseDetails.purchaseDate || 'Tercatat di Server' }}</div>
+          <div><strong>Masa Aktif (Durasi):</strong> <span style="font-weight: 700; color: #047857;">{{ licenseDetails.duration || 'Aktif' }}</span></div>
+          <div><strong>Tanggal Expired:</strong> <span style="font-weight: 700; color: #047857;">{{ licenseDetails.expiryDate || 'Lifetime / Aktif' }}</span></div>
         </div>
       </div>
     </div>
