@@ -66,16 +66,7 @@
       <SettingsTab v-else-if="activeTab === 'settings' || activeTab === 'scheduler' || activeTab === 'contacts'" />
     </main>
 
-    <!-- Sticky Bottom Action Button -->
-    <footer class="ac-sidebar-footer">
-      <button class="ac-btn-gradient-green" @click="activeTab = 'broadcast'">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M22 12A10 10 0 0 0 12 2v10z"/>
-          <path d="M12 2A10 10 0 0 0 2 12h10z"/>
-        </svg>
-        + Buat Broadcast Baru
-      </button>
-    </footer>
+
 
     <!-- Interactive Onboarding Modal -->
     <div v-if="showOnboarding" class="ac-modal-overlay">
