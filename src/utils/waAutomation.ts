@@ -912,9 +912,10 @@ export async function runRealBroadcast(
 
     // Dynamic variable replacement: {nama}, {name}, {email}, {nomor}, {phone}
     currentMsg = currentMsg
-      .replace(/\{nama\}|\{name\}/gi, recipientName || 'Kak')
+      .replace(/\{nama\}|\{name\}/gi, recipientName || '')
       .replace(/\{email\}/gi, recipientEmail || '')
       .replace(/\{nomor\}|\{phone\}/gi, targetPhone || '')
+      .replace(/  +/g, ' ')
 
     let attempt = 0
     let delivered = false
