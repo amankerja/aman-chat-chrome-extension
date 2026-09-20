@@ -6,6 +6,8 @@ import {
   getAutoReplyAdvanced,
   setAnalytics,
   getAnalytics,
+  getCRMContacts,
+  setCRMContacts,
   isExtensionValid,
   bumpDailyStat,
   addErrorLog
@@ -76,23 +78,38 @@ function matchesRuleKeyword(incomingText: string, rule: AutoReplyRule): boolean 
 
   if (keywords.length === 0) return false
 
+  const cleanIncoming = incomingText.trim().toLowerCase()
+
   return keywords.some(k => {
+    let matched = false
     switch (matchType) {
       case 'exact':
-        return incomingText === k
+        matched = cleanIncoming === k
+        break
       case 'startsWith':
       case 'starts_with':
-        return incomingText.startsWith(k)
+        matched = cleanIncoming.startsWith(k)
+        break
       case 'regex':
         try {
-          return new RegExp(k, 'i').test(incomingText)
+          matched = new RegExp(k, 'i').test(cleanIncoming)
         } catch {
-          return incomingText.includes(k)
+          matched = cleanIncoming.includes(k)
         }
+        break
       case 'contains':
       default:
-        return incomingText.includes(k)
+        if (/^\d+$/.test(k)) {
+          matched = cleanIncoming === k || cleanIncoming.split(/\s+/).includes(k)
+        } else {
+          matched = cleanIncoming.includes(k)
+        }
+        break
     }
+    if (matched) {
+      console.log(`[AMAN CHAT] Rule matched: "${k}" (type: ${matchType}) for "${incomingText}"`)
+    }
+    return matched
   })
 }
 
@@ -146,6 +163,62 @@ function updateContactCooldown(chatKey: string): void {
   contactCooldownMap.set(chatKey, Date.now())
 }
 
+export async function autoTagAndShiftCRMStage(chatKey: string, incomingText: string): Promise<void> {
+  try {
+    const contacts = await getCRMContacts()
+    const cleanKey = chatKey.trim().toLowerCase()
+    const digitsOnly = chatKey.replace(/[^0-9]/g, '')
+
+    let contact = contacts.find(c =>
+      c.name.toLowerCase() === cleanKey ||
+      (digitsOnly && c.phone.includes(digitsOnly))
+    )
+
+    const text = incomingText.toLowerCase()
+    let tagToAdd = ''
+    let targetStage: 'lead' | 'prospect' | 'customer' | null = null
+
+    if (text.includes('transfer') || text.includes('lunas') || text.includes('bayar') || text.includes('sudah tf') || text.includes('bukti')) {
+      tagToAdd = '💰 Sudah Membeli'
+      targetStage = 'customer'
+    } else if (text.includes('harga') || text.includes('pricelist') || text.includes('berapa') || text.includes('ongkir') || text.includes('rek')) {
+      tagToAdd = '🔥 Hot Lead'
+      targetStage = 'prospect'
+    } else if (text.includes('info') || text.includes('tanya') || text.includes('produk')) {
+      tagToAdd = '🟡 Prospect'
+      targetStage = 'prospect'
+    }
+
+    if (!tagToAdd && !targetStage) return
+
+    if (!contact) {
+      contact = {
+        id: Date.now().toString() + Math.random().toString(36).substring(2, 4),
+        name: chatKey,
+        phone: digitsOnly || chatKey,
+        stage: targetStage || 'lead',
+        source: 'Auto-Tag Bot',
+        tags: tagToAdd ? [tagToAdd] : [],
+        notes: `Otomatis ditambahkan saat pesan: "${incomingText.slice(0, 50)}"`,
+        lastUpdated: new Date().toLocaleDateString('id-ID')
+      }
+      contacts.push(contact)
+    } else {
+      if (tagToAdd && !contact.tags.includes(tagToAdd)) {
+        contact.tags.push(tagToAdd)
+      }
+      if (targetStage) {
+        contact.stage = targetStage
+      }
+      contact.lastUpdated = new Date().toLocaleDateString('id-ID')
+    }
+
+    await setCRMContacts(contacts)
+  } catch (e) {
+    console.warn('[AMAN CHAT] Auto tag error:', e)
+  }
+}
+
 export function checkAndAutoReply(): void {
   if (!isExtensionValid()) return
 
@@ -161,7 +234,7 @@ export function checkAndAutoReply(): void {
     const isNewChat = chatKey !== lastChatKey
     if (isNewChat) {
       lastChatKey = chatKey
-      // Mark older incoming messages except the last one as remembered
+      // On opening existing chat, mark all messages prior to the last incoming as read
       for (let i = 0; i < incomingNodes.length - 1; i++) {
         rememberMsgId(getMsgId(incomingNodes[i], i))
       }
@@ -202,8 +275,11 @@ export function checkAndAutoReply(): void {
     const settings = await getAutoReplyAdvancedSettings()
     const advanced = await getAutoReplyAdvanced()
 
-    const cooldownMin = settings.cooldownMinutes || advanced.cooldownMinutes || 3
-    if (isContactInCooldown(chatKey, cooldownMin)) {
+    const cooldownMin = (settings && settings.cooldownMinutes !== undefined)
+      ? settings.cooldownMinutes
+      : (advanced ? advanced.cooldownMinutes : 0)
+
+    if (cooldownMin > 0 && isContactInCooldown(chatKey, cooldownMin)) {
       console.log(`[AMAN CHAT] Auto-reply skipped for "${chatKey}" (Cooldown active ${cooldownMin}m)`)
       rememberMsgId(msgId)
       return
@@ -211,9 +287,7 @@ export function checkAndAutoReply(): void {
 
     let replyText = ''
 
-    if (advanced.schedule?.enabled && !isWithinScheduleHours(advanced.schedule.startHour, advanced.schedule.endHour)) {
-      replyText = advanced.schedule.outsideHoursReply
-    } else if (settings.useWorkingHours && !isWithinWorkingHours(settings)) {
+    if (settings.useWorkingHours && !isWithinWorkingHours(settings)) {
       if (settings.outOfHoursReply) {
         replyText = settings.outOfHoursReply
       } else {
@@ -226,7 +300,8 @@ export function checkAndAutoReply(): void {
       const mode = await getAutoReplyMode()
 
       if (mode === 'all') {
-        replyText = rules[0]?.reply || 'Halo! Pesan Anda telah kami terima.'
+        const activeRule = rules.find(r => r.active)
+        replyText = activeRule ? activeRule.reply : (settings.defaultReplyEnabled ? settings.defaultReplyText : 'Halo! Pesan Anda telah kami terima.')
       } else {
         for (const r of rules) {
           if (matchesRuleKeyword(incomingText, r)) {
@@ -235,8 +310,8 @@ export function checkAndAutoReply(): void {
           }
         }
 
-        if (!replyText && (settings.defaultReplyEnabled || advanced.defaultReplyEnabled)) {
-          replyText = settings.defaultReplyText || advanced.defaultReply || ''
+        if (!replyText && settings.defaultReplyEnabled) {
+          replyText = settings.defaultReplyText || ''
         }
       }
     }
@@ -245,6 +320,7 @@ export function checkAndAutoReply(): void {
       replyText = applyReplyVariables(replyText)
       console.log(`[AMAN CHAT] 🤖 Smart Auto-replying to "${incomingText}" with "${replyText}"`)
       updateContactCooldown(chatKey)
+      await autoTagAndShiftCRMStage(chatKey, incomingText)
       await new Promise(res => setTimeout(res, 800))
       await sendRealMessage(replyText, 'instant')
 
@@ -481,28 +557,7 @@ export async function openPhoneChat(phone: string): Promise<void> {
     }
   }
 
-  // METHOD 1: Native Anchor Link Click (Triggers WhatsApp Web's internal link handler)
-  try {
-    let link = document.getElementById('aman-chat-direct-link') as HTMLAnchorElement | null
-    if (!link) {
-      link = document.createElement('a')
-      link.id = 'aman-chat-direct-link'
-      link.style.display = 'none'
-      document.body.appendChild(link)
-    }
-    link.href = `https://web.whatsapp.com/send?phone=${cleanPhone}`
-    link.click()
-
-    const fastComposer = await pollForElement(findComposerInput, 2000, 100)
-    if (fastComposer) {
-      console.log(`[AMAN CHAT] Successfully opened chat for ${cleanPhone} via Native Link Click.`)
-      return
-    }
-  } catch (err) {
-    console.warn('[AMAN CHAT] Native link click failed:', err)
-  }
-
-  // METHOD 2: DOM UI Search Fallback with Lexical Paste & Expanded Search Candidates
+  // DOM UI Search (Primary SPA Method - avoids page reload)
   let searchInput = findWaSearchInput()
 
   if (!searchInput) {
@@ -831,7 +886,53 @@ export async function sendRealMessage(text: string, typingMode: 'instant' | 'cha
   return cleared
 }
 
-// Global state for real broadcast runner
+export async function attachAndSendMedia(file: File): Promise<boolean> {
+  try {
+    if (!file || !(file instanceof File)) {
+      console.warn('[AMAN CHAT] Parameter file bukan instance File yang valid:', file)
+      return false
+    }
+
+    const attachBtn = (
+      document.querySelector('div[title="Lampirkan"]') ||
+      document.querySelector('div[title="Attach"]') ||
+      document.querySelector('span[data-icon="plus"]') ||
+      document.querySelector('span[data-icon="clip"]') ||
+      document.querySelector('button[aria-label="Lampirkan"]') ||
+      document.querySelector('button[aria-label="Attach"]')
+    ) as HTMLElement | null
+
+    if (!attachBtn) return false
+    attachBtn.click()
+    await new Promise(r => setTimeout(r, 600))
+
+    const fileInput = document.querySelector('input[type="file"][accept*="image"], input[type="file"]') as HTMLInputElement | null
+    if (!fileInput) return false
+
+    const dt = new DataTransfer()
+    dt.items.add(file)
+    fileInput.files = dt.files
+    fileInput.dispatchEvent(new Event('change', { bubbles: true }))
+
+    await new Promise(r => setTimeout(r, 1200))
+
+    const sendMediaBtn = (
+      document.querySelector('span[data-icon="send"]') ||
+      document.querySelector('div[aria-label="Kirim"]') ||
+      document.querySelector('div[aria-label="Send"]')
+    )?.closest('button, div[role="button"]') as HTMLElement | null
+
+    if (sendMediaBtn) {
+      sendMediaBtn.click()
+      await new Promise(r => setTimeout(r, 1000))
+      return true
+    }
+    return false
+  } catch (e) {
+    console.error('[AMAN CHAT] Error sending media attachment:', e)
+    return false
+  }
+}
 let isBroadcastRunning = false
 let isBroadcastPaused = false
 
@@ -843,6 +944,7 @@ export interface RecipientItem {
   phone: string
   name?: string
   email?: string
+  customVars?: Record<string, string>
 }
 
 export interface BroadcastProgress {
@@ -861,6 +963,7 @@ export interface BroadcastRunOptions {
   minInterval: number
   maxInterval: number
   typingMode: 'instant' | 'character'
+  attachment?: File
   maxRetries?: number
   batchCooldownEvery?: number
   batchCooldownSeconds?: number
@@ -952,17 +1055,25 @@ export async function runRealBroadcast(
     const targetPhone = typeof item === 'string' ? item : item.phone
     const recipientName = typeof item === 'string' ? '' : (item.name || '')
     const recipientEmail = typeof item === 'string' ? '' : (item.email || '')
+    const customVars = typeof item === 'string' ? {} : (item.customVars || {})
 
     let currentMsg = useTwo && i % 2 === 1 && msg2 ? msg2 : msg1
     if (enableSpintax) {
       currentMsg = parseSpintax(currentMsg)
     }
 
-    // Dynamic variable replacement: supports {nama}, [nama], \bnama\b, {name}, [name], \bname\b, {email}, [email], {nomor}, [nomor], {phone}
+    // Dynamic variable replacement: supports {nama}, {name}, {email}, {nomor}, {phone}, {produk}, {harga}, {invoice}, {var1}, {var2}, etc.
     currentMsg = currentMsg
       .replace(/\{nama\}|\[nama\]|\bnama\b|\{name\}|\[name\]|\bname\b/gi, recipientName || '')
       .replace(/\{email\}|\[email\]|\bemail\b/gi, recipientEmail || '')
       .replace(/\{nomor\}|\[nomor\]|\{phone\}|\[phone\]/gi, targetPhone || '')
+
+    for (const [vKey, vVal] of Object.entries(customVars)) {
+      const reg = new RegExp(`\\{${vKey}\\}|\\[${vKey}\\]`, 'gi')
+      currentMsg = currentMsg.replace(reg, vVal || '')
+    }
+
+    currentMsg = currentMsg
       .replace(/  +/g, ' ')
       .replace(/ ,/g, ',')
 
@@ -1005,7 +1116,12 @@ export async function runRealBroadcast(
       await new Promise(r => setTimeout(r, 500))
       if (!isBroadcastRunning) return
 
-      const sent = await sendRealMessage(currentMsg, mode)
+      let sent = await sendRealMessage(currentMsg, mode)
+
+      if (sent && opts.attachment) {
+        await new Promise(r => setTimeout(r, 600))
+        await attachAndSendMedia(opts.attachment)
+      }
 
       if (sent) {
         delivered = true
@@ -1114,21 +1230,35 @@ export async function processUnreadChatsQueue(): Promise<void> {
   const enabled = await getAutoReplyEnabled()
   if (!enabled) return
 
-  const unreadBadges = Array.from(document.querySelectorAll('#side [data-testid="icon-unread-count"], #side span[aria-label*="unread"], #side span[aria-label*="belum dibaca"], #side [class*="unread"]')) as HTMLElement[]
+  // Auto Reply Queue: Cari semua badge unread / belum dibaca di daftar chat samping (#side)
+  const unreadBadges = Array.from(document.querySelectorAll(
+    '#side [data-testid="icon-unread-count"], ' +
+    '#side span[aria-label*="unread"], ' +
+    '#side span[aria-label*="belum dibaca"], ' +
+    '#side [class*="unread"], ' +
+    '#side span[class*="unread"]'
+  )) as HTMLElement[]
+
   if (unreadBadges.length === 0) return
 
-  const targetBadge = unreadBadges[0]
-  const chatRow = (targetBadge.closest('[data-testid="chat-list-item"]') || targetBadge.closest('div[role="listitem"]') || targetBadge.closest('div[tabindex]')) as HTMLElement | null
+  for (const badge of unreadBadges) {
+    const chatRow = (
+      badge.closest('[data-testid="chat-list-item"]') ||
+      badge.closest('div[role="listitem"]') ||
+      badge.closest('div[tabindex]')
+    ) as HTMLElement | null
 
-  if (chatRow && isElementVisible(chatRow)) {
-    isProcessingUnreadQueue = true
-    try {
-      console.log('[AMAN CHAT] 📩 Auto Reply Queue: Membuka chat belum dibaca secara otomatis...')
-      chatRow.click()
-      await new Promise(r => setTimeout(r, 600))
-      checkAndAutoReply()
-    } finally {
-      setTimeout(() => { isProcessingUnreadQueue = false }, 1500)
+    if (chatRow && isElementVisible(chatRow)) {
+      isProcessingUnreadQueue = true
+      try {
+        console.log('[AMAN CHAT] 📩 Auto Reply Queue: Membuka pesan belum dibaca secara otomatis...')
+        chatRow.click()
+        await new Promise(r => setTimeout(r, 1800))
+        checkAndAutoReply()
+        await new Promise(r => setTimeout(r, 2200))
+      } finally {
+        setTimeout(() => { isProcessingUnreadQueue = false }, 1200)
+      }
     }
   }
 }

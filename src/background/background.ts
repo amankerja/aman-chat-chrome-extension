@@ -34,6 +34,7 @@ chrome.runtime.onInstalled.addListener((details: chrome.runtime.InstalledDetails
   })
 
   chrome.alarms.create('wku-schedule-check', { periodInMinutes: 0.5 })
+  chrome.alarms.create('wku-webhook-poll', { periodInMinutes: 0.5 })
 })
 
 function openOrFocusWhatsAppTab(phone?: string): void {
@@ -171,8 +172,46 @@ chrome.runtime.onMessage.addListener((
 chrome.alarms.onAlarm.addListener((alarm: chrome.alarms.Alarm) => {
   if (alarm.name === 'wku-schedule-check') {
     checkScheduledMessages()
+  } else if (alarm.name === 'wku-webhook-poll') {
+    checkWebhookQueue()
   }
 })
+
+async function checkWebhookQueue(): Promise<void> {
+  chrome.storage.local.get(['wku_webhook_enabled', 'wku_webhook_url', 'wku_webhook_secret', 'wku_device_id'], async (res) => {
+    const webhookUrl = String(res.wku_webhook_url || '').trim()
+    const webhookSecret = String(res.wku_webhook_secret || '').trim()
+    const deviceId = String(res.wku_device_id || '').trim()
+
+    if (!res.wku_webhook_enabled || !webhookUrl || !webhookUrl.startsWith('http')) return
+
+    try {
+      const url = new URL(webhookUrl)
+      url.searchParams.append('action', 'get_pending')
+      url.searchParams.append('deviceId', deviceId)
+      if (webhookSecret) url.searchParams.append('secret', webhookSecret)
+
+      const response = await fetch(url.toString(), { method: 'GET' })
+      if (!response.ok) return
+
+      const data = await response.json()
+      const pendingList = Array.isArray(data) ? data : (data.messages || data.data || [])
+
+      if (Array.isArray(pendingList) && pendingList.length > 0) {
+        chrome.tabs.query({ url: '*://web.whatsapp.com/*' }, (tabs: chrome.tabs.Tab[]) => {
+          if (tabs[0]?.id) {
+            chrome.tabs.sendMessage(tabs[0].id, {
+              action: 'sendScheduledMessages',
+              messages: pendingList
+            })
+          }
+        })
+      }
+    } catch {
+      // Silent catch if webhook server unreachable
+    }
+  })
+}
 
 function checkScheduledMessages(): void {
   chrome.storage.local.get(['wku_scheduled_messages'], (result: Record<string, unknown>) => {
@@ -182,7 +221,7 @@ function checkScheduledMessages(): void {
     const dueMessages = messages.filter((m) => m.scheduledTime <= now)
 
     if (dueMessages.length > 0) {
-      chrome.tabs.query({ url: 'https://web.whatsapp.com/*' }, (tabs: chrome.tabs.Tab[]) => {
+      chrome.tabs.query({ url: '*://web.whatsapp.com/*' }, (tabs: chrome.tabs.Tab[]) => {
         if (tabs[0]?.id) {
           chrome.tabs.sendMessage(tabs[0].id, {
             action: 'sendScheduledMessages',

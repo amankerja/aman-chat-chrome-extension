@@ -1,5 +1,3 @@
-@import "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap";
-
 $primary: #25D366;
 $primary-hover: #128C7E;
 $bg-body: #F6F8FA;
@@ -20,17 +18,40 @@ $status-dumping-text: #854d0e;
 $status-breakdown-bg: #fee2e2;
 $status-breakdown-text: #b91c1c;
 
-.aman-chat-container * {
+// Unified Modern Font Stack
+$font-family-base: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+$font-family-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+
+.aman-chat-container,
+.aman-chat-container *,
+.aman-chat-container *::before,
+.aman-chat-container *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
+.aman-chat-container,
+.aman-chat-container button,
+.aman-chat-container input,
+.aman-chat-container select,
+.aman-chat-container textarea,
+.aman-chat-container optgroup {
+  font-family: $font-family-base !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.aman-chat-container code,
+.aman-chat-container pre,
+.aman-chat-container kbd,
+.aman-chat-container .ac-code-font {
+  font-family: $font-family-mono !important;
+}
+
 .aman-chat-container {
   color: $text-main;
   z-index: 99999;
-  -webkit-font-smoothing: antialiased;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   position: relative;
 }
 
@@ -97,6 +118,7 @@ $status-breakdown-text: #b91c1c;
   border-left: 1px solid rgba(255, 255, 255, 0.6); // Soft glass edge
   flex-direction: column;
   width: 440px !important;
+  max-width: calc(100vw - 20px) !important;
   height: calc(100vh - 32px) !important;
   transition: right 300ms cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
@@ -112,95 +134,221 @@ $status-breakdown-text: #b91c1c;
     right: 16px !important;
     border-radius: 20px;
   }
+
+  @media (max-width: 640px) {
+    width: calc(100vw - 16px) !important;
+    max-width: 100vw !important;
+    top: 8px !important;
+    height: calc(100vh - 16px) !important;
+
+    &.is-open {
+      right: 8px !important;
+    }
+  }
 }
 
-/* Header Area (72px Height) */
+/* Header Area (64px Height) */
 .ac-sidebar-header {
   background: #ffffff;
-  border-bottom: 1px solid #E5E7EB;
-  height: 72px;
+  border-bottom: 1px solid #e2e8f0;
+  height: 64px;
   flex-shrink: 0;
   justify-content: space-between;
   align-items: center;
-  padding: 0 20px;
+  padding: 0 12px;
   display: flex;
+  gap: 6px;
 }
 
 .ac-sidebar-brand {
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   display: flex;
+  flex-shrink: 0;
+  min-width: 0;
 }
 
 .ac-logo-icon {
   background: $primary;
-  border-radius: 12px;
+  border-radius: 10px;
   flex-shrink: 0;
   justify-content: center;
   align-items: center;
-  width: 40px;
-  height: 40px;
+  width: 38px;
+  height: 38px;
   display: flex;
 
   svg {
     color: #ffffff;
-    width: 22px;
-    height: 22px;
+    width: 20px;
+    height: 20px;
   }
 }
 
 .ac-brand-text {
   display: flex;
   flex-direction: column;
+  justify-content: center;
+  white-space: nowrap;
 }
 
 .ac-brand-name {
   font-weight: 700;
-  font-size: 1rem;
+  font-size: 0.95rem;
   line-height: 1.2;
   color: $text-main;
   letter-spacing: -0.01em;
+  white-space: nowrap;
 }
 
 .ac-version-badge {
-  background: #E6F4EA;
-  color: #137333;
-  font-size: 0.68rem;
+  background: #dcfce7;
+  color: #15803d;
+  font-size: 0.65rem;
   font-weight: 600;
-  padding: 2px 6px;
+  padding: 2px 7px;
   border-radius: 9999px;
+  border: 1px solid #bbf7d0;
+  white-space: nowrap;
+  line-height: 1.1;
+  display: inline-flex;
+  align-items: center;
 }
 
 .ac-online-dot {
-  width: 7px;
-  height: 7px;
-  background: #25D366;
+  width: 6px;
+  height: 6px;
+  background: #22c55e;
   border-radius: 50%;
   display: inline-block;
+  flex-shrink: 0;
 }
 
 .ac-brand-tagline {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   color: $text-sub;
   font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Header Action Controls */
+.ac-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.ac-zoom-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  height: 30px;
+  padding: 0 2px;
+  box-sizing: border-box;
+}
+
+.ac-zoom-btn {
+  background: transparent;
+  border: none;
+  color: #475569;
+  font-weight: 700;
+  font-size: 0.85rem;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 1;
+  transition: background 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+  }
+}
+
+.ac-zoom-badge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #334155;
+  padding: 0 2px;
+  min-width: 32px;
+  text-align: center;
+  cursor: pointer;
+  user-select: none;
+  line-height: 1;
+
+  &:hover {
+    color: #0f172a;
+  }
+}
+
+.ac-tour-btn {
+  height: 30px;
+  padding: 0 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border-radius: 8px;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+    color: #0f172a;
+  }
 }
 
 .ac-close-btn {
-  border-radius: 12px;
+  height: 30px;
+  width: 30px;
+  padding: 0;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+
+  &:hover {
+    background: #fee2e2;
+    border-color: #fca5a5;
+    color: #dc2626;
+  }
 }
 
 /* Icon Navigation Grid (2 Rows) */
 .ac-sidebar-nav {
-  padding: 12px 16px;
+  padding: 10px 14px;
   background: #ffffff;
-  border-bottom: 1px solid #E5E7EB;
+  border-bottom: 1px solid #e2e8f0;
   flex-shrink: 0;
 }
 
 .ac-nav-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+  gap: 6px;
 }
 
 .ac-nav-card {
@@ -208,43 +356,62 @@ $status-breakdown-text: #b91c1c;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 12px 4px;
+  gap: 4px;
+  height: 64px;
+  padding: 6px 4px;
   background: #ffffff;
-  border: 1px solid transparent;
-  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  user-select: none;
 
   &:hover {
     background: #f8fafc;
-    border-color: #e2e8f0;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 6px rgba(0,0,0,0.04);
+    border-color: #cbd5e1;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
   }
 
   &.active {
-    background: #ecfdf5; // Soft green tint
-    border-color: $primary;
-    color: $primary;
-    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+    background: #f0fdf4;
+    border: 1px solid #22c55e;
+    color: #16a34a;
+    box-shadow: 0 2px 8px rgba(34, 197, 94, 0.15);
+
+    .ac-nav-icon {
+      transform: scale(1.08);
+    }
 
     .ac-nav-label {
-      color: $primary;
+      color: #16a34a;
       font-weight: 700;
     }
   }
 }
 
 .ac-nav-icon {
-  font-size: 1.1rem;
+  font-size: 1.25rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  transition: transform 0.18s ease;
 }
 
 .ac-nav-label {
   font-size: 0.72rem;
   font-weight: 600;
-  color: $text-main;
+  color: #334155;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  padding: 0 2px;
 }
 
 /* Content Container */
@@ -524,51 +691,8 @@ $status-breakdown-text: #b91c1c;
   resize: vertical;
 }
 
-.ac-zoom-controls {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  background: #F3F4F6;
-  border: 1px solid #E5E7EB;
-  border-radius: 8px;
-  padding: 2px 4px;
-}
-
-.ac-zoom-btn {
-  background: transparent;
-  border: none;
-  color: #374151;
-  font-weight: 700;
-  font-size: 0.8rem;
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  &:hover {
-    background: #E5E7EB;
-    color: #111827;
-  }
-}
-
-.ac-zoom-badge {
-  font-size: 0.68rem;
-  font-weight: 600;
-  color: #4B5563;
-  padding: 0 4px;
-  cursor: pointer;
-  user-select: none;
-
-  &:hover {
-    color: #111827;
-  }
-}
-
 .ac-btn {
-  padding: 10px 16px;
+  padding: 9px 16px;
   border-radius: 10px;
   font-size: 0.82rem;
   font-weight: 600;
@@ -579,6 +703,8 @@ $status-breakdown-text: #b91c1c;
   align-items: center;
   justify-content: center;
   gap: 6px;
+  font-family: inherit;
+  white-space: nowrap;
 
   &.primary {
     background: $primary;
@@ -616,9 +742,10 @@ $status-breakdown-text: #b91c1c;
   }
 
   &.sm {
-    padding: 6px 12px;
+    padding: 5px 12px;
     font-size: 0.75rem;
     border-radius: 8px;
+    height: 30px;
   }
 
   &:disabled {
@@ -793,6 +920,9 @@ kbd {
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
   text-align: center;
   width: 340px;
+  max-width: calc(100vw - 32px);
+  max-height: 90vh;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -858,6 +988,7 @@ kbd {
   border-radius: 12px;
   width: 100%;
   max-width: 360px;
+  max-height: 90vh;
   border: 1px solid $border;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
   display: flex;
@@ -878,6 +1009,8 @@ kbd {
     display: flex;
     flex-direction: column;
     gap: 10px;
+    overflow-y: auto;
+    max-height: calc(90vh - 110px);
   }
 
   .ac-modal-footer {
@@ -887,5 +1020,14 @@ kbd {
     justify-content: space-between;
     align-items: center;
     background: #f8fafc;
+  }
+}
+
+@media (max-width: 480px) {
+  .ac-grid-4, .ac-grid-3, .ac-grid-2 {
+    grid-template-columns: 1fr !important;
+  }
+  .ac-nav-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
   }
 }

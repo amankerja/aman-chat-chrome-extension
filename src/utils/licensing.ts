@@ -12,8 +12,9 @@ function checksumGroup(input: string): string {
   return hash.toString(36).toUpperCase().padStart(GROUP_LEN, '0').slice(-GROUP_LEN)
 }
 
-export function isValidLicenseFormat(rawKey: string): boolean {
-  const key = rawKey.trim().toUpperCase()
+export function isValidLicenseFormat(rawKey: any): boolean {
+  if (!rawKey) return false
+  const key = String(rawKey).trim().toUpperCase()
   if (key.startsWith('SM-') || key.startsWith('AMAN-')) return true
   const parts = key.split('-')
   if (parts.length !== 4) return false
@@ -25,8 +26,8 @@ export function isValidLicenseFormat(rawKey: string): boolean {
 }
 
 /** Helper for generating valid demo keys (e.g. from an admin/testing tool). */
-export function generateLicenseKey(seed: string): string {
-  const clean = seed.toUpperCase().replace(/[^A-Z0-9]/g, '').padEnd(8, '0')
+export function generateLicenseKey(seed: any): string {
+  const clean = String(seed || '').toUpperCase().replace(/[^A-Z0-9]/g, '').padEnd(8, '0')
   const g1 = clean.slice(0, 4)
   const g2 = clean.slice(4, 8)
   const checksum = checksumGroup(`${PREFIX}-${g1}-${g2}`)
@@ -47,14 +48,15 @@ export function setRemoteLicenseVerifier(fn: RemoteVerifier | null): void {
   remoteVerify = fn
 }
 
-export async function verifyLicenseKey(rawKey: string): Promise<LicenseVerificationResult> {
-  if (!isValidLicenseFormat(rawKey)) {
+export async function verifyLicenseKey(rawKey: any): Promise<LicenseVerificationResult> {
+  const cleanKey = String(rawKey || '').trim().toUpperCase()
+  if (!isValidLicenseFormat(cleanKey)) {
     return { valid: false, reason: 'bad_format', message: 'Format lisensi tidak valid.' }
   }
 
   if (remoteVerify) {
     try {
-      const ok = await remoteVerify(rawKey.trim().toUpperCase())
+      const ok = await remoteVerify(cleanKey)
       return ok ? { valid: true } : { valid: false, reason: 'remote_rejected', message: 'Lisensi ditolak oleh server.' }
     } catch {
       return { valid: false, reason: 'remote_unreachable', message: 'Gagal terhubung ke server lisensi.' }
@@ -65,19 +67,23 @@ export async function verifyLicenseKey(rawKey: string): Promise<LicenseVerificat
 }
 
 export async function verifySpreadsheetLicense(
-  serialNumber: string,
-  email: string = '',
-  phone: string = '',
-  apiUrl: string = ''
+  serialNumber: any,
+  email: any = '',
+  phone: any = '',
+  apiUrl: any = ''
 ): Promise<LicenseVerificationResult> {
-  const cleanSerial = serialNumber.trim().toUpperCase()
+  const cleanSerial = String(serialNumber || '').trim().toUpperCase()
+  const cleanEmail = String(email || '').trim()
+  const cleanPhone = String(phone || '').trim()
+  const cleanApiUrl = String(apiUrl || '').trim()
+
   if (!cleanSerial) {
     return { valid: false, message: 'Harap masukkan Serial Number lisensi!' }
   }
 
   const deviceId = await getDeviceId()
 
-  if (!apiUrl || !apiUrl.startsWith('http')) {
+  if (!cleanApiUrl || !cleanApiUrl.startsWith('http')) {
     if (isValidLicenseFormat(cleanSerial)) {
       return {
         valid: true,
@@ -86,8 +92,8 @@ export async function verifySpreadsheetLicense(
           serialNumber: cleanSerial,
           status: 'Active',
           deviceId,
-          email: email.trim(),
-          phone: phone.trim(),
+          email: cleanEmail,
+          phone: cleanPhone,
           duration: 'Lifetime',
           lastVerified: Date.now()
         }
@@ -101,12 +107,12 @@ export async function verifySpreadsheetLicense(
   }
 
   try {
-    const url = new URL(apiUrl)
+    const url = new URL(cleanApiUrl)
     url.searchParams.append('app', 'whatsappv1')
     url.searchParams.append('sn', cleanSerial)
     url.searchParams.append('deviceId', deviceId)
-    if (email.trim()) url.searchParams.append('email', email.trim())
-    if (phone.trim()) url.searchParams.append('no_telepon', phone.trim())
+    if (cleanEmail) url.searchParams.append('email', cleanEmail)
+    if (cleanPhone) url.searchParams.append('no_telepon', cleanPhone)
 
     const response = await fetch(url.toString(), {
       method: 'GET'
@@ -116,26 +122,26 @@ export async function verifySpreadsheetLicense(
       return { valid: false, message: `Server API Lisensi merespons error HTTP ${response.status}` }
     }
 
-    const rawText = (await response.text()).trim()
+    const rawText = String((await response.text()) || '').trim()
 
     // First try parsing as JSON (Apps Script JSON response)
     try {
       const data = JSON.parse(rawText)
-      if (data.status === 'success' || data.status === 'ACTIVATED' || data.status === 'SUCCESS' || data.valid === true) {
+      if (data && (data.status === 'success' || data.status === 'ACTIVATED' || data.status === 'SUCCESS' || data.valid === true)) {
         const details: LicenseDetails = {
-          serialNumber: data.serialNumber || cleanSerial,
+          serialNumber: String(data.serialNumber || cleanSerial).trim(),
           status: 'Active',
-          deviceId: data.deviceId || deviceId,
-          email: data.email || email.trim(),
-          phone: data.phone || phone.trim(),
-          purchaseDate: data.purchaseDate || '',
-          expiryDate: data.expiryDate || '',
-          duration: data.duration || '',
+          deviceId: String(data.deviceId || deviceId).trim(),
+          email: String(data.email !== undefined && data.email !== null ? data.email : cleanEmail).trim(),
+          phone: String(data.phone !== undefined && data.phone !== null ? data.phone : cleanPhone).trim(),
+          purchaseDate: String(data.purchaseDate || '').trim(),
+          expiryDate: String(data.expiryDate || '').trim(),
+          duration: String(data.duration || '').trim(),
           lastVerified: Date.now()
         }
-        return { valid: true, message: data.message || 'Aktivasi Lisensi Berhasil!', details }
+        return { valid: true, message: data.message ? String(data.message) : 'Aktivasi Lisensi Berhasil!', details }
       } else {
-        return { valid: false, message: data.message || 'Lisensi tidak valid atau telah expired.' }
+        return { valid: false, message: data && data.message ? String(data.message) : 'Lisensi tidak valid atau telah expired.' }
       }
     } catch {
       // Text fallback from router.gs
@@ -144,8 +150,8 @@ export async function verifySpreadsheetLicense(
           serialNumber: cleanSerial,
           status: 'Active',
           deviceId,
-          email: email.trim(),
-          phone: phone.trim(),
+          email: cleanEmail,
+          phone: cleanPhone,
           lastVerified: Date.now()
         }
         const msg = rawText === 'ACTIVATED' 
@@ -174,8 +180,8 @@ export async function verifySpreadsheetLicense(
           serialNumber: cleanSerial,
           status: 'Active',
           deviceId,
-          email: email.trim(),
-          phone: phone.trim(),
+          email: cleanEmail,
+          phone: cleanPhone,
           lastVerified: Date.now()
         }
       }

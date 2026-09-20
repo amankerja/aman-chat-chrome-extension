@@ -6,6 +6,7 @@ import type {
   CRMContact,
   PrivacySettings,
   FollowUpTask,
+  ScheduledMessage,
   Analytics,
   DailyStat,
   CustomTab,
@@ -27,6 +28,10 @@ const STORAGE_KEYS = {
   FOLLOWUP_TASKS: 'wku_followup_tasks',
   ANALYTICS: 'wku_analytics',
   CUSTOM_TABS: 'wku_custom_tabs',
+  SCHEDULED_MESSAGES: 'wku_scheduled_messages',
+  WEBHOOK_ENABLED: 'wku_webhook_enabled',
+  WEBHOOK_URL: 'wku_webhook_url',
+  WEBHOOK_SECRET: 'wku_webhook_secret',
   LICENSE_KEY: 'wku_license_key',
   LICENSE_API_URL: 'wku_license_api_url',
   LICENSE_DETAILS: 'wku_license_details',
@@ -75,6 +80,7 @@ const DEFAULT_AUTOREPLY_ADVANCED: AutoReplyAdvancedSettings = {
 const DEFAULT_AUTOREPLY_SETTINGS: AutoReplySettings = {
   enabled: false,
   mode: 'keywords',
+  targetChat: 'all',
   cooldownMinutes: 5,
   useWorkingHours: false,
   workingHoursStart: '08:00',
@@ -281,6 +287,38 @@ export function getCustomTabs(): Promise<CustomTab[]> {
 
 export function setCustomTabs(tabs: CustomTab[]): Promise<void> {
   return setStorage<CustomTab[]>(STORAGE_KEYS.CUSTOM_TABS, tabs)
+}
+
+export function getScheduledMessages(): Promise<ScheduledMessage[]> {
+  return getStorage<ScheduledMessage[]>(STORAGE_KEYS.SCHEDULED_MESSAGES, [])
+}
+
+export function setScheduledMessages(messages: ScheduledMessage[]): Promise<void> {
+  return setStorage<ScheduledMessage[]>(STORAGE_KEYS.SCHEDULED_MESSAGES, messages)
+}
+
+export function getWebhookEnabled(): Promise<boolean> {
+  return getStorage<boolean>(STORAGE_KEYS.WEBHOOK_ENABLED, false)
+}
+
+export function setWebhookEnabled(enabled: boolean): Promise<void> {
+  return setStorage<boolean>(STORAGE_KEYS.WEBHOOK_ENABLED, enabled)
+}
+
+export function getWebhookUrl(): Promise<string> {
+  return getStorage<string>(STORAGE_KEYS.WEBHOOK_URL, '')
+}
+
+export function setWebhookUrl(url: string): Promise<void> {
+  return setStorage<string>(STORAGE_KEYS.WEBHOOK_URL, url)
+}
+
+export function getWebhookSecret(): Promise<string> {
+  return getStorage<string>(STORAGE_KEYS.WEBHOOK_SECRET, '')
+}
+
+export function setWebhookSecret(secret: string): Promise<void> {
+  return setStorage<string>(STORAGE_KEYS.WEBHOOK_SECRET, secret)
 }
 
 export function getLicenseKey(): Promise<string | null> {

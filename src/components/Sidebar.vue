@@ -20,7 +20,7 @@
         </div>
       </div>
 
-      <div style="display: flex; gap: 6px; align-items: center;">
+      <div class="ac-header-actions">
         <!-- Zoom In / Zoom Out Controls -->
         <div class="ac-zoom-controls" title="Pengaturan Skala Tampilan (Zoom)">
           <button class="ac-zoom-btn" @click="zoomOut" title="Perkecil Tampilan (Zoom Out)">–</button>
@@ -28,11 +28,11 @@
           <button class="ac-zoom-btn" @click="zoomIn" title="Perbesar Tampilan (Zoom In)">+</button>
         </div>
 
-        <button class="ac-btn secondary sm" style="padding: 4px 8px; font-size: 0.72rem;" @click="showOnboarding = true" title="Panduan & Onboarding Tour">
+        <button class="ac-tour-btn" @click="showOnboarding = true" title="Panduan & Onboarding Tour">
           🚀 Tour
         </button>
-        <button class="ac-btn secondary sm ac-close-btn" @click="closeSidebar()" title="Tutup Panel (Alt+A)">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <button class="ac-close-btn" @click="closeSidebar()" title="Tutup Panel (Alt+A)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <line x1="18" y1="6" x2="6" y2="18"/>
             <line x1="6" y1="6" x2="18" y2="18"/>
           </svg>
@@ -79,7 +79,9 @@
       <AutoReplyTab v-else-if="activeTab === 'autoreply'" />
       <BroadcastTab v-else-if="activeTab === 'broadcast'" />
       <CRMTab v-else-if="activeTab === 'crm'" />
-      <SettingsTab v-else-if="activeTab === 'settings' || activeTab === 'scheduler' || activeTab === 'contacts'" />
+      <SchedulerTab v-else-if="activeTab === 'scheduler'" />
+      <ContactsTab v-else-if="activeTab === 'contacts'" />
+      <SettingsTab v-else-if="activeTab === 'settings'" />
     </main>
 
 
@@ -169,6 +171,8 @@ import TemplatesTab from './tabs/TemplatesTab.vue'
 import AutoReplyTab from './tabs/AutoReplyTab.vue'
 import BroadcastTab from './tabs/BroadcastTab.vue'
 import CRMTab from './tabs/CRMTab.vue'
+import SchedulerTab from './tabs/SchedulerTab.vue'
+import ContactsTab from './tabs/ContactsTab.vue'
 import SettingsTab from './tabs/SettingsTab.vue'
 
 const activeTab = ref('dashboard')
@@ -241,6 +245,11 @@ async function togglePrivacyShortcut() {
 }
 
 function handleGlobalKeydown(e: KeyboardEvent) {
+  const target = e.target as HTMLElement | null
+  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+    return
+  }
+
   if (e.altKey) {
     const key = e.key.toLowerCase()
     switch (key) {

@@ -35,6 +35,7 @@ export interface AutoReplyAdvancedSettings {
 export interface AutoReplySettings {
   enabled: boolean
   mode: 'all' | 'keywords'
+  targetChat: 'all' | 'personal' | 'group'
   cooldownMinutes: number
   useWorkingHours: boolean
   workingHoursStart: string
@@ -99,6 +100,15 @@ export interface PrivacySettings {
   pinLockEnabled?: boolean
   pinCode?: string
   inactivityTimeout?: number
+}
+
+export interface ScheduledMessage {
+  id: string
+  phone: string
+  message: string
+  scheduledTime: number
+  status: 'pending' | 'sent' | 'failed'
+  createdAt: number
 }
 
 export interface FollowUpTask {

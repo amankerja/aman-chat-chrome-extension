@@ -59,6 +59,15 @@
       ></textarea>
       <span class="ac-subtext" style="margin-top: 4px; display: block;">💡 Gunakan Spintax <code class="ac-code-font">{Kata1|Kata2|Kata3}</code> untuk merotasi variasi kata secara otomatis.</span>
 
+      <!-- File Attachment Upload -->
+      <div class="ac-form-group" style="margin-top: 10px;">
+        <label class="ac-label">📷 Lampiran Foto / Media (Opsional)</label>
+        <input type="file" accept="image/*,video/*,.pdf,.doc,.docx" class="ac-input" @change="handleMediaAttachment" :disabled="broadcastState.status === 'sending'" />
+        <span v-if="selectedFileName" class="ac-subtext" style="color: #10b981; margin-top: 4px; display: block;">
+          ✓ File terpilih: {{ selectedFileName }}
+        </span>
+      </div>
+
       <div class="ac-form-group" style="margin-top: 10px;">
         <label class="ac-checkbox-label">
           <input type="checkbox" v-model="broadcastState.useTwoMessages" />
@@ -313,6 +322,7 @@ function openErrorLogModal() {
 }
 const showResumeBanner = ref(false)
 const duplicateCount = ref(0)
+const selectedFileName = ref('')
 
 const broadcastState = ref<BroadcastState>({
   status: 'idle',
@@ -355,10 +365,18 @@ const parsedRecipients = computed<RecipientItem[]>(() => {
 
     if (!seen.has(phone)) {
       seen.add(phone)
+      const customVars: Record<string, string> = {}
+      if (parts[3]) customVars['produk'] = parts[3]
+      if (parts[4]) customVars['harga'] = parts[4]
+      if (parts[5]) customVars['invoice'] = parts[5]
+      if (parts[6]) customVars['var1'] = parts[6]
+      if (parts[7]) customVars['var2'] = parts[7]
+
       list.push({
         phone,
         name: parts[1] || '',
-        email: parts[2] || ''
+        email: parts[2] || '',
+        customVars
       })
     }
   }
@@ -436,6 +454,15 @@ async function saveCurrentState() {
   await setBroadcastState(broadcastState.value)
 }
 
+function handleMediaAttachment(event: Event) {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+
+  broadcastState.value.attachment = file
+  selectedFileName.value = file.name
+}
+
 function handleCSVImport(event: Event) {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0]
@@ -446,30 +473,33 @@ function handleCSVImport(event: Event) {
     const text = e.target?.result as string
     if (text) {
       const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
-      const importedLines: string[] = []
+      if (lines.length === 0) return
 
-      for (const line of lines) {
-        const parts = line.split(',').map(p => p.replace(/^"|"$/g, '').trim())
+      const importedLines: string[] = []
+      const startIndex = lines[0].toLowerCase().includes('phone') || lines[0].toLowerCase().includes('nomor') || lines[0].toLowerCase().includes('nama') ? 1 : 0
+
+      for (let i = startIndex; i < lines.length; i++) {
+        const parts = lines[i].split(',').map(p => p.replace(/^"|"$/g, '').trim())
         let phone = ''
         let name = ''
         let email = ''
+        const extraVars: string[] = []
 
         if (parts[0]?.replace(/[^0-9]/g, '').length >= 8) {
           phone = parts[0]
           name = parts[1] || ''
           email = parts[2] || ''
+          for (let k = 3; k < parts.length; k++) extraVars.push(parts[k])
         } else if (parts[1]?.replace(/[^0-9]/g, '').length >= 8) {
           name = parts[0] || ''
           phone = parts[1]
           email = parts[2] || ''
+          for (let k = 3; k < parts.length; k++) extraVars.push(parts[k])
         }
 
         if (phone) {
-          if (name || email) {
-            importedLines.push(`${phone}|${name}|${email}`.replace(/\|+$/, ''))
-          } else {
-            importedLines.push(phone)
-          }
+          const rowParts = [phone, name, email, ...extraVars]
+          importedLines.push(rowParts.join('|').replace(/\|+$/, ''))
         }
       }
 
@@ -522,6 +552,7 @@ async function startBroadcast() {
     minInterval: broadcastState.value.minInterval || 3,
     maxInterval: broadcastState.value.maxInterval || 7,
     typingMode: broadcastState.value.typingMode || 'instant',
+    attachment: broadcastState.value.attachment,
     maxRetries: broadcastState.value.maxRetries ?? 1,
     batchCooldownEvery: broadcastState.value.batchCooldownEvery ?? 20,
     batchCooldownSeconds: broadcastState.value.batchCooldownSeconds ?? 45,

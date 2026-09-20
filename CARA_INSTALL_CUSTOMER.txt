@@ -1,16 +1,72 @@
-========================================================
-   CARA INSTALASI EKSTENSI AMAN CHAT v3.0 PRO (1 MENIT)
-========================================================
+======================================================================
+     PANDUAN LENGKAP INSTALASI EKSTENSI AMAN CHAT v3.0 PRO
+======================================================================
 
-1. Klik 2x file "INSTALL_AMAN_CHAT.bat".
-2. Google Chrome akan otomatis terbuka ke halaman Extensions.
-3. Di pojok kanan atas Chrome, aktifkan sakelar "Mode pengembang" (Developer Mode).
-4. Di pojok kiri atas, klik tombol "Muat tanpa paket" (Load unpacked).
-5. Pada kotak alamat folder, tekan tombol keyboard ( Ctrl + V ), lalu tekan Enter / Pilih Folder.
-6. Buka https://web.whatsapp.com. Ekstensi AMAN CHAT siap digunakan!
+Terima kasih telah menggunakan AMAN CHAT!
+Ikuti 4 langkah mudah di bawah ini untuk memasang ekstensi di Google Chrome atau Microsoft Edge.
 
-========================================================
-   BUTUH BANTUAN / MEMBELI LISENSI?
-========================================================
-Hubungi Admin via WhatsApp: +62 822-2308-9790
-(https://wa.me/6282223089790)
+----------------------------------------------------------------------
+[PERSIAPAN AWAL] WAJIB EKSTRAK FILE ZIP
+----------------------------------------------------------------------
+1. Klik kanan pada file "INSTALLER_AMAN_CHAT_CUSTOMER_v3.0.zip".
+2. Pilih "Extract All..." (Ekstrak Semua), lalu klik "Extract".
+3. Buka folder hasil ekstrak tersebut.
+
+
+----------------------------------------------------------------------
+[LANGKAH 1] JALANKAN INSTALLER OTOMATIS
+----------------------------------------------------------------------
+1. Klik 2x pada file: "INSTALL_AMAN_CHAT.bat".
+2. File ekstensi akan otomatis dipasang ke komputer Anda, alamat folder 
+   otomatis tersalin ke Clipboard, dan browser Chrome/Edge akan otomatis terbuka.
+
+
+----------------------------------------------------------------------
+[LANGKAH 2] AKTIFKAN MODE PENGEMBANG (DEVELOPER MODE)
+----------------------------------------------------------------------
+1. Pada halaman ekstensi browser (chrome://extensions):
+2. Di pojok KANAN ATAS layar, cari sakelar:
+   [x] "Mode pengembang" / "Developer mode"
+3. Geser sakelar tersebut ke posisi AKTIF (berwarna biru).
+
+
+----------------------------------------------------------------------
+[LANGKAH 3] MUAT EKSTENSI KE BROWSER (LOAD UNPACKED)
+----------------------------------------------------------------------
+1. Setelah Mode Pengembang aktif, perhatikan pojok KIRI ATAS browser.
+2. Klik tombol:
+   [+] "Muat tanpa paket" / "Load unpacked"
+3. Jendela pemilihan folder Windows akan muncul:
+   - Klik pada kotak isian "Folder" / kotak alamat di atas.
+   - Tekan keyboard: ( Ctrl + V )  --> Alamat folder otomatis terisi.
+   - Tekan tombol Enter pada keyboard.
+   - Klik tombol "Select Folder" / "Pilih Folder" di kanan bawah.
+4. Kartu ekstensi "AMAN CHAT - WhatsApp Multi Automation" akan langsung muncul!
+
+
+----------------------------------------------------------------------
+[LANGKAH 4] BUKA WHATSAPP WEB & MULAI MENGGUNAKAN
+----------------------------------------------------------------------
+1. Buka tab baru di browser Anda: https://web.whatsapp.com
+2. Lakukan Refresh halaman (tekan F5 atau Ctrl + R).
+3. Sidebar AMAN CHAT akan langsung muncul di samping kanan WhatsApp Web Anda!
+
+*Tips: Klik ikon puzzle (Extensions) di toolbar kanan atas browser Chrome, lalu klik ikon PIN pada AMAN CHAT agar tombol pintas selalu terlihat.
+
+
+======================================================================
+   CARA AKTIVASI LISENSI PREMIUM
+======================================================================
+1. Di WhatsApp Web, buka menu "Pengaturan" pada Sidebar AMAN CHAT.
+2. Masukkan Kode Serial Number Lisensi Anda pada kolom Lisensi.
+3. Masukkan Email & No. WhatsApp Anda, lalu klik "Verifikasi Lisensi".
+4. Selesai! Semua fitur Broadcast, CRM, Auto-Reply, & Export Data aktif.
+
+
+======================================================================
+   BUTUH BANTUAN / KENDALA TEKNIS?
+======================================================================
+Jika Anda mengalami kendala saat instalasi, silakan hubungi tim support kami:
+WhatsApp Admin : +62 822-2308-9790
+Link Chat Langsung : https://wa.me/6282223089790
+======================================================================

@@ -91,6 +91,54 @@
       </div>
     </div>
 
+    <!-- Webhook & API Order Integration Card -->
+    <div class="ac-card">
+      <div class="ac-section-header">
+        <h3 class="ac-label" style="display: flex; align-items: center; gap: 6px;">
+          🔗 Integrasi Webhook & Auto Trigger (Shopee / Web Store)
+        </h3>
+        <label class="ac-switch">
+          <input type="checkbox" v-model="webhookEnabled" @change="saveWebhookSettings" />
+          <span class="slider"></span>
+        </label>
+      </div>
+      <p class="ac-subtext">
+        Hubungkan WhatsApp Web ke server toko online, Shopee, atau WooCommerce untuk pengiriman pesan otomatis saat terjadi pesanan baru.
+      </p>
+
+      <div v-if="webhookEnabled" style="margin-top: 8px; display: flex; flex-direction: column; gap: 8px;">
+        <div class="ac-form-group">
+          <label class="ac-label">Webhook API Endpoint URL</label>
+          <input
+            v-model="webhookUrl"
+            class="ac-input"
+            placeholder="https://tokoanda.com/api/wa-webhook.php"
+            @change="saveWebhookSettings"
+          />
+        </div>
+
+        <div class="ac-form-group">
+          <label class="ac-label">API Secret Key (Opsional)</label>
+          <input
+            v-model="webhookSecret"
+            type="password"
+            class="ac-input"
+            placeholder="Masukkan Secret Key..."
+            @change="saveWebhookSettings"
+          />
+        </div>
+
+        <div class="ac-grid-2">
+          <button class="ac-btn secondary sm" @click="testWebhookConnection" :disabled="isTestingWebhook">
+            {{ isTestingWebhook ? '⏳ Memeriksa...' : '🧪 Uji Koneksi Webhook' }}
+          </button>
+          <button class="ac-btn primary sm" @click="saveWebhookSettings">
+            💾 Simpan Pengaturan
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- License & Account Status Card -->
     <div class="ac-card">
       <div class="ac-section-header">
@@ -343,7 +391,13 @@ import {
   getIsPremium,
   setIsPremium,
   getErrorLogs,
-  clearErrorLogs
+  clearErrorLogs,
+  getWebhookEnabled,
+  setWebhookEnabled,
+  getWebhookUrl,
+  setWebhookUrl,
+  getWebhookSecret,
+  setWebhookSecret
 } from '../../utils/storage'
 import { verifySpreadsheetLicense } from '../../utils/licensing'
 import {
@@ -380,6 +434,41 @@ const currentAppVersion = ref(getCurrentVersion())
 const githubRepoInput = ref('')
 const githubUpdateInfo = ref<GitHubUpdateInfo | null>(null)
 const isCheckingUpdate = ref(false)
+
+const webhookEnabled = ref(false)
+const webhookUrl = ref('')
+const webhookSecret = ref('')
+const isTestingWebhook = ref(false)
+
+async function saveWebhookSettings() {
+  await setWebhookEnabled(webhookEnabled.value)
+  await setWebhookUrl(webhookUrl.value.trim())
+  await setWebhookSecret(webhookSecret.value.trim())
+}
+
+async function testWebhookConnection() {
+  if (!webhookUrl.value.trim()) {
+    alert('Harap masukkan Webhook Endpoint URL terlebih dahulu.')
+    return
+  }
+  isTestingWebhook.value = true
+  try {
+    const url = new URL(webhookUrl.value.trim())
+    url.searchParams.append('action', 'ping')
+    if (webhookSecret.value.trim()) url.searchParams.append('secret', webhookSecret.value.trim())
+
+    const response = await fetch(url.toString(), { method: 'GET' })
+    if (response.ok) {
+      alert('✅ Berhasil terhubung ke Webhook Server API!')
+    } else {
+      alert(`⚠️ Server merespons HTTP status ${response.status}`)
+    }
+  } catch (e: any) {
+    alert('❌ Gagal terhubung ke Webhook Server: ' + e.message)
+  } finally {
+    isTestingWebhook.value = false
+  }
+}
 
 async function saveGithubRepo() {
   await setGitHubRepo(githubRepoInput.value)
@@ -456,6 +545,9 @@ async function loadSettings() {
   privacy.value = await getPrivacySettings()
   licenseApiUrl.value = await getLicenseApiUrl()
   githubRepoInput.value = await getGitHubRepo()
+  webhookEnabled.value = await getWebhookEnabled()
+  webhookUrl.value = await getWebhookUrl()
+  webhookSecret.value = await getWebhookSecret()
   const key = await getLicenseKey()
   licenseKey.value = key || ''
   licenseDetails.value = await getLicenseDetails()
@@ -473,7 +565,7 @@ async function savePrivacy() {
 }
 
 async function saveApiUrl() {
-  await setLicenseApiUrl(licenseApiUrl.value.trim())
+  await setLicenseApiUrl(String(licenseApiUrl.value || '').trim())
 }
 
 function handlePinToggle() {
@@ -495,7 +587,8 @@ async function saveNewPin() {
 }
 
 async function verifyLicense() {
-  if (!licenseKey.value.trim()) {
+  const inputKey = String(licenseKey.value || '').trim()
+  if (!inputKey) {
     alert('Harap masukkan Serial Number lisensi terlebih dahulu.')
     return
   }
@@ -505,13 +598,13 @@ async function verifyLicense() {
 
   try {
     const result = await verifySpreadsheetLicense(
-      licenseKey.value,
+      inputKey,
       userEmailInput.value,
       userPhoneInput.value,
       licenseApiUrl.value
     )
     if (result.valid && result.details) {
-      await setLicenseKey(licenseKey.value.trim().toUpperCase())
+      await setLicenseKey(inputKey.toUpperCase())
       await setLicenseDetails(result.details)
       await setIsPremium(true)
       licenseDetails.value = result.details

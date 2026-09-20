@@ -1,6 +1,6 @@
 import { createApp, type App } from 'vue'
 import Sidebar from '../components/Sidebar.vue'
-import { initAutoReplyObserver, openPhoneChat, dismissReloadCallsModal } from '../utils/waAutomation'
+import { initAutoReplyObserver, openPhoneChat, dismissReloadCallsModal, sendRealMessage } from '../utils/waAutomation'
 import { sidebarState, toggleSidebarState, openSidebar as openSidebarState, closeSidebar } from '../utils/sidebarState'
 import { debounce } from '../utils/helpers'
 import '../content/styles.scss'
@@ -384,8 +384,18 @@ function setupMessageListener(): void {
 // Call setupMessageListener synchronously at top level during script evaluation!
 setupMessageListener()
 
-function handleScheduledMessages(messages: unknown[]): void {
+async function handleScheduledMessages(messages: any[]): Promise<void> {
   console.log('[AMAN CHAT] Processing scheduled messages:', messages.length)
+  for (const item of messages) {
+    if (!item.phone || !item.message) continue
+    try {
+      await openPhoneChat(item.phone)
+      await new Promise(r => setTimeout(r, 1200))
+      await sendRealMessage(item.message, 'instant')
+    } catch (e) {
+      console.error('[AMAN CHAT] Scheduled message send error:', e)
+    }
+  }
 }
 
 let isContentInitialized = false

@@ -178,6 +178,7 @@ const showForm = ref(false)
 const advancedSettings = ref<AutoReplySettings>({
   enabled: false,
   mode: 'keywords',
+  targetChat: 'all',
   cooldownMinutes: 5,
   useWorkingHours: false,
   workingHoursStart: '08:00',
