@@ -31,21 +31,40 @@
     <div class="ac-card">
       <div class="ac-section-header">
         <h3 class="ac-label">Daftar Nomor Penerima</h3>
-        <label class="ac-btn secondary sm" style="cursor: pointer;">
-          📁 Impor CSV
-          <input type="file" accept=".csv" style="display: none;" @change="handleCSVImport" />
-        </label>
+        <div style="display: flex; gap: 6px; align-items: center;">
+          <button
+            type="button"
+            class="ac-btn secondary sm"
+            style="display: inline-flex; align-items: center; gap: 4px; font-weight: 600;"
+            @click="openInboxContactPicker"
+          >
+            💬 Dari Inbox / Chat
+          </button>
+          <label class="ac-btn secondary sm" style="cursor: pointer;">
+            📁 Impor CSV
+            <input type="file" accept=".csv" style="display: none;" @change="handleCSVImport" />
+          </label>
+        </div>
       </div>
       <textarea
         v-model="rawNumbers"
         class="ac-textarea"
-        placeholder="Masukkan nomor HP (contoh: +62 822-2308-9790, 08123456789, atau dari CSV)"
+        placeholder="Masukkan nomor HP (contoh: +62 822-2308-9790, 08123456789, atau format: 628123456789|Nama Kontak)"
         :disabled="broadcastState.status === 'sending'"
       ></textarea>
-      <span class="ac-subtext">
-        Total terdeteksi: {{ parsedNumbers.length }} nomor unik
-        <template v-if="duplicateCount > 0">({{ duplicateCount }} duplikat otomatis dihapus)</template>
-      </span>
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 4px; flex-wrap: wrap; gap: 4px;">
+        <span class="ac-subtext">
+          Total terdeteksi: {{ parsedNumbers.length }} nomor unik
+          <template v-if="duplicateCount > 0">({{ duplicateCount }} duplikat otomatis dihapus)</template>
+        </span>
+        <span v-if="!isPremium" class="ac-badge queuing" style="font-size: 0.65rem;">
+          Free: Maks 2 nomor / sesi
+        </span>
+      </div>
+      <div v-if="!isPremium && parsedNumbers.length > 2" style="margin-top: 8px; padding: 6px 10px; background: #fef9c3; border: 1px solid #fde047; border-radius: 8px; font-size: 0.72rem; color: #854d0e; display: flex; align-items: center; gap: 6px;">
+        <span>⚠️</span>
+        <span>Akun Free: Maksimal <strong>2 nomor</strong> per sesi broadcast. Sistem hanya akan memproses 2 nomor pertama. Upgrade ke Lisensi PRO di tab Pengaturan untuk pengiriman tanpa batas.</span>
+      </div>
     </div>
 
     <!-- Message Content Card -->
@@ -57,7 +76,7 @@
         placeholder="Tuliskan pesan utama... (contoh: {Halo|Selamat Pagi|Sapaan} {kak|gan|sis}, promo menarik hari ini!)"
         :disabled="broadcastState.status === 'sending'"
       ></textarea>
-      <span class="ac-subtext" style="margin-top: 4px; display: block;">💡 Gunakan Spintax <code class="ac-code-font">{Kata1|Kata2|Kata3}</code> untuk merotasi variasi kata secara otomatis.</span>
+      <span class="ac-subtext" style="margin-top: 4px; display: block;">💡 Gunakan <code class="ac-code-font">{nama}</code> untuk menyapa nama penerima, dan Spintax <code class="ac-code-font">{Kata1|Kata2}</code> untuk variasi kata otomatis.</span>
 
       <!-- File Attachment Upload -->
       <div class="ac-form-group" style="margin-top: 10px;">
@@ -265,6 +284,168 @@
         </div>
       </div>
     </div>
+
+    <!-- Modal Picker: Pilih Kontak dari Inbox & Chat -->
+    <div v-if="showContactPickerModal" class="ac-modal-overlay" @click.self="showContactPickerModal = false">
+      <div class="ac-modal-content" style="max-width: 440px; display: flex; flex-direction: column; max-height: 85vh;">
+        <div class="ac-section-header" style="margin-bottom: 8px; flex-shrink: 0;">
+          <h3 class="ac-label" style="font-size: 0.92rem; display: flex; align-items: center; gap: 6px; margin: 0; color: #0f172a;">
+            💬 Pilih Kontak dari Inbox & Chat
+          </h3>
+          <button class="ac-btn secondary sm" style="padding: 2px 8px;" @click="showContactPickerModal = false">✕ Tutup</button>
+        </div>
+
+        <p class="ac-subtext" style="margin-bottom: 8px; flex-shrink: 0;">
+          Pilih kontak dari obrolan WhatsApp Web atau database CRM untuk dimasukkan langsung beserta namanya ke daftar broadcast.
+        </p>
+
+        <!-- Search & Scan Bar -->
+        <div style="display: flex; gap: 6px; margin-bottom: 8px; flex-shrink: 0;">
+          <input
+            v-model="contactSearchQuery"
+            type="text"
+            class="ac-input"
+            style="flex: 1;"
+            placeholder="Cari nama atau nomor HP..."
+          />
+          <button
+            type="button"
+            class="ac-btn secondary sm"
+            style="white-space: nowrap; padding: 0 10px;"
+            :disabled="isScanningInbox"
+            @click="refreshInboxContacts"
+          >
+            {{ isScanningInbox ? '⏳ Memindai...' : '🔄 Pindai Ulang' }}
+          </button>
+        </div>
+
+        <!-- Filter Pills & Selection Counter -->
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; flex-shrink: 0; flex-wrap: wrap; gap: 6px;">
+          <div style="display: flex; gap: 4px;">
+            <button
+              type="button"
+              class="ac-cat-pill"
+              :class="{ active: contactFilterSource === 'all' }"
+              @click="contactFilterSource = 'all'"
+            >
+              Semua ({{ inboxContacts.length }})
+            </button>
+            <button
+              type="button"
+              class="ac-cat-pill"
+              :class="{ active: contactFilterSource === 'inbox' }"
+              @click="contactFilterSource = 'inbox'"
+            >
+              Inbox ({{ countInboxOnly }})
+            </button>
+            <button
+              type="button"
+              class="ac-cat-pill"
+              :class="{ active: contactFilterSource === 'crm' }"
+              @click="contactFilterSource = 'crm'"
+            >
+              CRM ({{ countCrmOnly }})
+            </button>
+          </div>
+
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <button
+              type="button"
+              class="ac-btn secondary sm"
+              style="padding: 2px 8px; font-size: 0.68rem;"
+              @click="selectAllContacts"
+            >
+              Pilih Semua
+            </button>
+            <button
+              type="button"
+              class="ac-btn secondary sm"
+              style="padding: 2px 8px; font-size: 0.68rem;"
+              @click="deselectAllContacts"
+            >
+              Hapus Pilihan
+            </button>
+          </div>
+        </div>
+
+        <!-- Warning for Free Tier when more than 2 contacts selected -->
+        <div v-if="!isPremium" style="margin-bottom: 8px; padding: 6px 8px; background: #fef9c3; border: 1px solid #fde047; border-radius: 6px; font-size: 0.7rem; color: #854d0e; flex-shrink: 0;">
+          ℹ️ Versi FREE: Maksimal <strong>2 nomor</strong> per sesi broadcast. {{ selectedContactsCount > 2 ? `(Anda memilih ${selectedContactsCount} kontak — hanya 2 nomor pertama yang akan diproses per sesi)` : '' }}
+        </div>
+
+        <!-- Scrollable Contact List -->
+        <div class="ac-inbox-contact-list" style="flex: 1; overflow-y: auto; max-height: 280px; display: flex; flex-direction: column; gap: 4px; padding-right: 2px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px; background: #f8fafc;">
+          <div v-if="isScanningInbox" style="text-align: center; padding: 24px 8px; color: #64748b; font-size: 0.78rem;">
+            ⏳ Sedang memindai obrolan inbox dan kontak CRM...
+          </div>
+          <div v-else-if="filteredInboxContacts.length === 0" style="text-align: center; padding: 24px 8px; color: #94a3b8; font-size: 0.78rem;">
+            Tidak ada kontak yang cocok dengan pencarian atau belum ada chat di inbox.
+          </div>
+          <div
+            v-else
+            v-for="contact in filteredInboxContacts"
+            :key="contact.id"
+            class="ac-inbox-contact-row"
+            :class="{ selected: selectedContactIds.has(contact.id) }"
+            @click="toggleSelectContact(contact)"
+          >
+            <input
+              type="checkbox"
+              :checked="selectedContactIds.has(contact.id)"
+              style="cursor: pointer; margin-right: 6px;"
+              @click.stop="toggleSelectContact(contact)"
+            />
+            <div style="flex: 1; min-width: 0;">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
+                <span style="font-size: 0.78rem; font-weight: 600; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                  {{ contact.name || 'Kontak WhatsApp' }}
+                </span>
+                <span
+                  class="ac-badge"
+                  :class="contact.source === 'inbox' ? 'hauling' : (contact.source === 'crm' ? 'active' : 'queuing')"
+                  style="font-size: 0.62rem; padding: 1px 6px;"
+                >
+                  {{ contact.source.toUpperCase() }}
+                </span>
+              </div>
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 2px;">
+                <span class="ac-code-font" style="font-size: 0.72rem; color: #2563eb; font-weight: 500;">
+                  {{ contact.phone }}
+                </span>
+                <span v-if="contact.lastMessage" style="font-size: 0.65rem; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px;">
+                  {{ contact.lastMessage }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer Actions -->
+        <div style="display: flex; gap: 8px; margin-top: 10px; justify-content: space-between; align-items: center; flex-shrink: 0; flex-wrap: wrap;">
+          <span class="ac-subtext" style="font-weight: 600; color: #0f172a;">
+            Terpilih: {{ selectedContactsCount }} kontak
+          </span>
+          <div style="display: flex; gap: 6px;">
+            <button
+              type="button"
+              class="ac-btn secondary sm"
+              :disabled="selectedContactsCount === 0"
+              @click="applySelectedContacts('replace')"
+            >
+              Ganti Daftar
+            </button>
+            <button
+              type="button"
+              class="ac-btn primary sm"
+              :disabled="selectedContactsCount === 0"
+              @click="applySelectedContacts('append')"
+            >
+              ✓ Tambahkan ke Broadcast ({{ selectedContactsCount }})
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -273,7 +454,9 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import type { BroadcastState } from '../../types'
 import { getBroadcastState, setBroadcastState, getErrorLogs, clearErrorLogs, getIsPremium } from '../../utils/storage'
 import { downloadCSV, formatPhoneNumber } from '../../utils/helpers'
+import { scanInboxChatsAndContacts } from '../../utils/inboxContacts'
 import type { RecipientItem } from '../../utils/waAutomation'
+import type { InboxContactItem } from '../../types'
 import {
   runRealBroadcast,
   pauseRealBroadcast,
@@ -323,6 +506,118 @@ function openErrorLogModal() {
 const showResumeBanner = ref(false)
 const duplicateCount = ref(0)
 const selectedFileName = ref('')
+const isPremium = ref(false)
+
+// Inbox & Chat Contact Picker State
+const showContactPickerModal = ref(false)
+const isScanningInbox = ref(false)
+const inboxContacts = ref<InboxContactItem[]>([])
+const contactSearchQuery = ref('')
+const contactFilterSource = ref<'all' | 'inbox' | 'crm'>('all')
+const selectedContactIds = ref<Set<string>>(new Set())
+
+const countInboxOnly = computed(() => {
+  return inboxContacts.value.filter(c => c.source === 'inbox' || c.source === 'active_chat').length
+})
+
+const countCrmOnly = computed(() => {
+  return inboxContacts.value.filter(c => c.source === 'crm' || c.source === 'grabber').length
+})
+
+const filteredInboxContacts = computed(() => {
+  let list = inboxContacts.value
+  if (contactFilterSource.value === 'inbox') {
+    list = list.filter(c => c.source === 'inbox' || c.source === 'active_chat')
+  } else if (contactFilterSource.value === 'crm') {
+    list = list.filter(c => c.source === 'crm' || c.source === 'grabber')
+  }
+
+  if (contactSearchQuery.value.trim()) {
+    const q = contactSearchQuery.value.trim().toLowerCase()
+    list = list.filter(c =>
+      (c.name && c.name.toLowerCase().includes(q)) ||
+      c.phone.includes(q)
+    )
+  }
+  return list
+})
+
+const selectedContactsCount = computed(() => selectedContactIds.value.size)
+
+async function openInboxContactPicker() {
+  showContactPickerModal.value = true
+  if (inboxContacts.value.length === 0) {
+    await refreshInboxContacts()
+  }
+}
+
+async function refreshInboxContacts() {
+  isScanningInbox.value = true
+  try {
+    const scanned = await scanInboxChatsAndContacts()
+    inboxContacts.value = scanned
+  } catch (e) {
+    console.warn('[AMAN CHAT] Gagal memindai kontak inbox:', e)
+  } finally {
+    isScanningInbox.value = false
+  }
+}
+
+function toggleSelectContact(contact: InboxContactItem) {
+  const set = new Set(selectedContactIds.value)
+  if (set.has(contact.id)) {
+    set.delete(contact.id)
+  } else {
+    if (!isPremium.value && set.size >= 2) {
+      alert('ℹ️ Versi FREE dibatasi maksimal 2 nomor per sesi broadcast.\n\nAnda dapat memilih hingga 2 nomor, atau upgrade ke Lisensi PRO untuk memilih kontak tanpa batas!')
+      return
+    }
+    set.add(contact.id)
+  }
+  selectedContactIds.value = set
+}
+
+function selectAllContacts() {
+  const set = new Set<string>()
+  const items = filteredInboxContacts.value
+
+  if (!isPremium.value) {
+    const limit = Math.min(2, items.length)
+    for (let i = 0; i < limit; i++) {
+      set.add(items[i].id)
+    }
+    if (items.length > 2) {
+      alert('ℹ️ Versi FREE dibatasi maksimal 2 nomor per sesi broadcast.\n\nSistem otomatis memilih 2 kontak pertama. Upgrade ke Lisensi PRO untuk memilih semua sekaligus.')
+    }
+  } else {
+    for (const c of items) {
+      set.add(c.id)
+    }
+  }
+  selectedContactIds.value = set
+}
+
+function deselectAllContacts() {
+  selectedContactIds.value = new Set()
+}
+
+function applySelectedContacts(mode: 'append' | 'replace') {
+  const selectedList = inboxContacts.value.filter(c => selectedContactIds.value.has(c.id))
+  if (selectedList.length === 0) return
+
+  const lines = selectedList.map(c => {
+    return c.name && c.name !== c.phone ? `${c.phone}|${c.name}` : c.phone
+  })
+
+  if (mode === 'replace' || !rawNumbers.value.trim()) {
+    rawNumbers.value = lines.join('\n')
+  } else {
+    rawNumbers.value = rawNumbers.value.trim() + '\n' + lines.join('\n')
+  }
+
+  saveCurrentState()
+  showContactPickerModal.value = false
+}
 
 const broadcastState = ref<BroadcastState>({
   status: 'idle',
@@ -436,18 +731,25 @@ async function loadSavedState() {
 }
 
 function handleStorageChange(changes: Record<string, chrome.storage.StorageChange>, areaName: string) {
-  if (areaName === 'local' && changes.wku_broadcast_state) {
-    const newState = changes.wku_broadcast_state.newValue as BroadcastState | undefined
-    if (newState) {
-      if (!Array.isArray(newState.logs)) newState.logs = []
-      if (!Array.isArray(newState.numbers)) newState.numbers = []
-      broadcastState.value = newState
+  if (areaName === 'local') {
+    if (changes.wku_broadcast_state) {
+      const newState = changes.wku_broadcast_state.newValue as BroadcastState | undefined
+      if (newState) {
+        if (!Array.isArray(newState.logs)) newState.logs = []
+        if (!Array.isArray(newState.numbers)) newState.numbers = []
+        broadcastState.value = newState
+      }
+    }
+    if (changes.wku_is_premium) {
+      isPremium.value = Boolean(changes.wku_is_premium.newValue)
     }
   }
 }
 
 async function saveCurrentState() {
-  broadcastState.value.numbers = parsedNumbers.value
+  if (broadcastState.value.status === 'idle') {
+    broadcastState.value.numbers = parsedNumbers.value
+  }
   if (!Array.isArray(broadcastState.value.logs)) {
     broadcastState.value.logs = []
   }
@@ -524,25 +826,27 @@ function onBroadcastProgress(progress: { index: number; total: number; log: stri
     broadcastState.value.status = 'completed'
   }
 
-  saveCurrentState()
+  setBroadcastState(broadcastState.value)
 }
 
 async function startBroadcast() {
   if (parsedRecipients.value.length === 0 || !broadcastState.value.message) return
 
   const isPro = await getIsPremium()
+  isPremium.value = isPro
   let targetRecipients = parsedRecipients.value
 
-  if (!isPro && targetRecipients.length > 5) {
-    alert(`ℹ️ Versi FREE dibatasi maksimal 5 nomor per broadcast.\n\nSistem akan mengirim ke 5 nomor pertama saja dari total ${targetRecipients.length} nomor.\n\nAktifkan Lisensi PRO di tab Pengaturan untuk pengiriman tanpa batas!`)
-    targetRecipients = targetRecipients.slice(0, 5)
+  if (!isPro && targetRecipients.length > 2) {
+    alert(`ℹ️ Versi FREE dibatasi maksimal 2 nomor per sesi broadcast.\n\nSistem akan mengirim ke 2 nomor pertama saja dari total ${targetRecipients.length} nomor.\n\nAktifkan Lisensi PRO di tab Pengaturan untuk pengiriman tanpa batas!`)
+    targetRecipients = targetRecipients.slice(0, 2)
   }
 
   broadcastState.value.status = 'sending'
   broadcastState.value.currentIndex = 0
   broadcastState.value.logs = []
   broadcastState.value.failedNumbers = []
-  await saveCurrentState()
+  broadcastState.value.numbers = targetRecipients.map(r => r.phone)
+  await setBroadcastState(broadcastState.value)
 
   runRealBroadcast({
     numbers: targetRecipients,
@@ -568,10 +872,18 @@ async function resumeInterruptedBroadcast() {
   showResumeBanner.value = false
   broadcastState.value.status = 'sending'
   const startIndex = broadcastState.value.currentIndex
-  await saveCurrentState()
+
+  const isPro = await getIsPremium()
+  isPremium.value = isPro
+  let runNumbers = broadcastState.value.numbers
+  if (!isPro && runNumbers.length > 2) {
+    runNumbers = runNumbers.slice(0, 2)
+    broadcastState.value.numbers = runNumbers
+  }
+  await setBroadcastState(broadcastState.value)
 
   runRealBroadcast({
-    numbers: broadcastState.value.numbers,
+    numbers: runNumbers,
     message1: broadcastState.value.message,
     message2: broadcastState.value.message2,
     useTwoMessages: broadcastState.value.useTwoMessages,
@@ -600,15 +912,24 @@ async function retryFailedOnly() {
   const failed = broadcastState.value.failedNumbers || []
   if (failed.length === 0) return
 
-  rawNumbers.value = failed.join('\n')
+  const isPro = await getIsPremium()
+  isPremium.value = isPro
+  let targetFailed = failed
+  if (!isPro && targetFailed.length > 2) {
+    alert(`ℹ️ Versi FREE dibatasi maksimal 2 nomor per sesi broadcast.\n\nSistem akan mengirim ke 2 nomor pertama saja dari total ${targetFailed.length} nomor yang gagal.\n\nAktifkan Lisensi PRO di tab Pengaturan untuk pengiriman tanpa batas!`)
+    targetFailed = targetFailed.slice(0, 2)
+  }
+
+  rawNumbers.value = targetFailed.join('\n')
   broadcastState.value.status = 'sending'
   broadcastState.value.currentIndex = 0
-  broadcastState.value.logs.push(`[${new Date().toLocaleTimeString('id-ID')}] --- Mengirim ulang ke ${failed.length} nomor yang gagal ---`)
+  broadcastState.value.logs.push(`[${new Date().toLocaleTimeString('id-ID')}] --- Mengirim ulang ke ${targetFailed.length} nomor yang gagal ---`)
   broadcastState.value.failedNumbers = []
-  await saveCurrentState()
+  broadcastState.value.numbers = targetFailed
+  await setBroadcastState(broadcastState.value)
 
   runRealBroadcast({
-    numbers: failed,
+    numbers: targetFailed,
     message1: broadcastState.value.message,
     message2: broadcastState.value.message2,
     useTwoMessages: broadcastState.value.useTwoMessages,
@@ -650,8 +971,9 @@ function downloadLogs() {
   downloadCSV(content, `real-broadcast-log-${Date.now()}.txt`)
 }
 
-onMounted(() => {
-  loadSavedState()
+onMounted(async () => {
+  await loadSavedState()
+  isPremium.value = await getIsPremium()
   chrome.storage.onChanged.addListener(handleStorageChange)
 })
 
@@ -727,6 +1049,40 @@ onUnmounted(() => {
   width: 100%;
   max-width: 380px;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.08);
+}
+.ac-cat-pill {
+  padding: 3px 8px;
+  border-radius: 9999px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  font-size: 0.7rem;
+  font-weight: 500;
+  cursor: pointer;
+  color: #64748b;
+  transition: all 0.15s ease;
+}
+.ac-cat-pill.active {
+  background: #2563eb;
+  color: #ffffff;
+  border-color: #2563eb;
+}
+.ac-inbox-contact-row {
+  display: flex;
+  align-items: center;
+  padding: 6px 8px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.ac-inbox-contact-row:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+.ac-inbox-contact-row.selected {
+  background: #eff6ff;
+  border-color: #93c5fd;
 }
 </style>
 

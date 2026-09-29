@@ -46,15 +46,45 @@ export interface AutoReplySettings {
   defaultReplyText: string
 }
 
+export interface CRMStage {
+  id: string
+  name: string
+  color: string
+  isDefault?: boolean
+}
+
 export interface CRMContact {
   id: string
   name: string
   phone: string
-  stage: 'lead' | 'prospect' | 'customer' | 'churned'
+  stage: string
   source: string
   tags: string[]
   notes: string
   lastUpdated: string
+}
+
+export interface InboxContactItem {
+  id: string
+  name: string
+  phone: string
+  source: 'inbox' | 'crm' | 'grabber' | 'active_chat'
+  lastMessage?: string
+  avatarUrl?: string
+  isSelected?: boolean
+}
+
+export interface GrabbedContact {
+  id: string
+  name: string
+  phone: string
+  groupName: string
+  grabbedAt: string
+}
+
+export interface GroupGrabberUsage {
+  monthKey: string
+  count: number
 }
 
 export interface BroadcastState {

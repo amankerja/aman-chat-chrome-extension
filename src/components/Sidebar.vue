@@ -75,9 +75,10 @@
     <!-- Content Area -->
     <main class="ac-sidebar-content">
       <DashboardTab v-if="activeTab === 'dashboard'" @open-broadcast="activeTab = 'broadcast'" />
+      <BroadcastTab v-else-if="activeTab === 'broadcast'" />
+      <GroupGrabberTab v-else-if="activeTab === 'grabber'" @navigate-tab="activeTab = $event" @fill-broadcast-numbers="handleFillBroadcastNumbers" />
       <TemplatesTab v-else-if="activeTab === 'templates'" />
       <AutoReplyTab v-else-if="activeTab === 'autoreply'" />
-      <BroadcastTab v-else-if="activeTab === 'broadcast'" />
       <CRMTab v-else-if="activeTab === 'crm'" />
       <SchedulerTab v-else-if="activeTab === 'scheduler'" />
       <ContactsTab v-else-if="activeTab === 'contacts'" />
@@ -161,7 +162,9 @@ import {
   getLicenseApiUrl,
   getLicenseDetails,
   setLicenseDetails,
-  setIsPremium
+  setIsPremium,
+  getBroadcastState,
+  setBroadcastState
 } from '../utils/storage'
 import { verifySpreadsheetLicense } from '../utils/licensing'
 import { checkForGitHubUpdate } from '../utils/githubUpdate'
@@ -170,6 +173,7 @@ import DashboardTab from './tabs/DashboardTab.vue'
 import TemplatesTab from './tabs/TemplatesTab.vue'
 import AutoReplyTab from './tabs/AutoReplyTab.vue'
 import BroadcastTab from './tabs/BroadcastTab.vue'
+import GroupGrabberTab from './tabs/GroupGrabberTab.vue'
 import CRMTab from './tabs/CRMTab.vue'
 import SchedulerTab from './tabs/SchedulerTab.vue'
 import ContactsTab from './tabs/ContactsTab.vue'
@@ -184,6 +188,7 @@ const updateInfo = ref<GitHubUpdateInfo | null>(null)
 const tabs = [
   { id: 'dashboard', name: 'Dashboard', icon: '📊' },
   { id: 'broadcast', name: 'Broadcast', icon: '📢' },
+  { id: 'grabber', name: 'Grab Grup', icon: '🎯' },
   { id: 'templates', name: 'Template', icon: '📄' },
   { id: 'autoreply', name: 'Auto Reply', icon: '🤖' },
   { id: 'crm', name: 'CRM', icon: '👥' },
@@ -191,6 +196,28 @@ const tabs = [
   { id: 'contacts', name: 'Kontak', icon: '📱' },
   { id: 'settings', name: 'Pengaturan', icon: '⚙️' }
 ]
+
+async function handleFillBroadcastNumbers(numbersString: string) {
+  const state = await getBroadcastState()
+  const nums = numbersString.split('\n').map(s => s.trim()).filter(Boolean)
+  if (state) {
+    state.numbers = nums
+    await setBroadcastState(state)
+  } else {
+    await setBroadcastState({
+      status: 'idle',
+      numbers: nums,
+      currentIndex: 0,
+      message: '',
+      useTwoMessages: false,
+      minInterval: 5,
+      maxInterval: 12,
+      logs: [],
+      typingMode: 'instant'
+    })
+  }
+  activeTab.value = 'broadcast'
+}
 
 async function loadZoomScale() {
   zoomScale.value = await getZoomScale()
@@ -267,6 +294,11 @@ function handleGlobalKeydown(e: KeyboardEvent) {
         activeTab.value = 'broadcast'
         if (!sidebarState.isOpen) toggleSidebarState()
         break
+      case 'g':
+        e.preventDefault()
+        activeTab.value = 'grabber'
+        if (!sidebarState.isOpen) toggleSidebarState()
+        break
       case 'r':
         e.preventDefault()
         activeTab.value = 'autoreply'
@@ -339,6 +371,13 @@ async function checkUpdate() {
   }
 }
 
+function handleWindowMessage(event: MessageEvent) {
+  if (event.data?.type === 'AMAN_CHAT_NAVIGATE' && event.data.tab) {
+    activeTab.value = event.data.tab
+    if (!sidebarState.isOpen) toggleSidebarState()
+  }
+}
+
 onMounted(() => {
   console.log('[AMAN CHAT] Sidebar component mounted')
   loadZoomScale()
@@ -346,10 +385,12 @@ onMounted(() => {
   autoSyncLicense()
   checkUpdate()
   window.addEventListener('keydown', handleGlobalKeydown)
+  window.addEventListener('message', handleWindowMessage)
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleGlobalKeydown)
+  window.removeEventListener('message', handleWindowMessage)
 })
 </script>
 

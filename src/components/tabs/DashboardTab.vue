@@ -265,13 +265,14 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import type { Analytics, FollowUpTask, CRMContact, DailyStat } from '../../types'
+import type { Analytics, FollowUpTask, CRMContact, CRMStage, DailyStat } from '../../types'
 import {
   getAnalytics,
   setAnalytics,
   getFollowUpTasks,
   setFollowUpTasks,
   getCRMContacts,
+  getCRMStages,
   getPrivacySettings,
   setPrivacySettings,
   getDailyStatsMap
@@ -366,31 +367,30 @@ function barHeight(value: number): number {
   return Math.round((value / maxDailyValue.value) * usableHeight)
 }
 
-const STAGE_META: Record<CRMContact['stage'], { label: string; color: string }> = {
-  lead: { label: 'Lead', color: '#94a3b8' },
-  prospect: { label: 'Prospect', color: '#f59e0b' },
-  customer: { label: 'Customer', color: '#22c55e' },
-  churned: { label: 'Churned', color: '#ef4444' }
-}
+const stages = ref<CRMStage[]>([])
 
 const pipelineBreakdown = computed(() => {
-  const counts: Record<string, number> = { lead: 0, prospect: 0, customer: 0, churned: 0 }
+  const counts: Record<string, number> = {}
+  for (const st of stages.value) {
+    counts[st.id] = 0
+  }
   for (const c of crmContacts.value) {
     counts[c.stage] = (counts[c.stage] || 0) + 1
   }
   const max = Math.max(1, ...Object.values(counts))
-  return (Object.keys(STAGE_META) as CRMContact['stage'][]).map(key => ({
-    key,
-    label: STAGE_META[key].label,
-    color: STAGE_META[key].color,
-    count: counts[key] || 0,
-    pct: Math.round(((counts[key] || 0) / max) * 100)
+  return stages.value.map(st => ({
+    key: st.id,
+    label: st.name,
+    color: st.color || '#3b82f6',
+    count: counts[st.id] || 0,
+    pct: Math.round(((counts[st.id] || 0) / max) * 100)
   }))
 })
 
 async function refreshData() {
   analytics.value = await getAnalytics()
   crmContacts.value = await getCRMContacts()
+  stages.value = await getCRMStages()
   tasks.value = await getFollowUpTasks()
   const privacy = await getPrivacySettings()
   privacyActive.value = privacy.blurChats || privacy.blurMessages || privacy.blurAvatars

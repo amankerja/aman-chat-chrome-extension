@@ -2,6 +2,7 @@ import { createApp, type App } from 'vue'
 import Sidebar from '../components/Sidebar.vue'
 import { initAutoReplyObserver, openPhoneChat, dismissReloadCallsModal, sendRealMessage } from '../utils/waAutomation'
 import { sidebarState, toggleSidebarState, openSidebar as openSidebarState, closeSidebar } from '../utils/sidebarState'
+import { initCrmContextMenu } from './contextMenu'
 import { debounce } from '../utils/helpers'
 import '../content/styles.scss'
 
@@ -414,6 +415,7 @@ function init(): void {
       setupPrivacyBlur()
       initActivityListeners()
       initAutoReplyObserver()
+      initCrmContextMenu()
       console.log('[AMAN CHAT] Content script initialized')
     }
   }, 500)

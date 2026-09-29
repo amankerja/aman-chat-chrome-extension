@@ -240,7 +240,7 @@
           <tbody>
             <tr>
               <td><strong>Kuota Broadcast</strong></td>
-              <td style="text-align: center; color: #ef4444; font-weight: 700;">5 / Sesi</td>
+              <td style="text-align: center; color: #ef4444; font-weight: 700;">2 / Sesi</td>
               <td style="text-align: center; color: #16a34a; font-weight: 700;">Unlimited</td>
               <td>Membatasi jumlah nomor penerima dalam satu kali sesi pengiriman broadcast massal.</td>
             </tr>

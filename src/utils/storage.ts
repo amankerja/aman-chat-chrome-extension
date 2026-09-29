@@ -11,7 +11,10 @@ import type {
   DailyStat,
   CustomTab,
   BroadcastState,
-  LicenseDetails
+  LicenseDetails,
+  GrabbedContact,
+  GroupGrabberUsage,
+  CRMStage
 } from '../types'
 
 const STORAGE_KEYS = {
@@ -24,6 +27,7 @@ const STORAGE_KEYS = {
   AUTOREPLY_ADVANCED: 'wku_autoreply_advanced',
   DAILY_STATS: 'wku_daily_stats',
   CRM_CONTACTS: 'wku_crm_contacts',
+  CRM_STAGES: 'wku_crm_stages',
   BROADCAST_STATE: 'wku_broadcast_state',
   FOLLOWUP_TASKS: 'wku_followup_tasks',
   ANALYTICS: 'wku_analytics',
@@ -36,7 +40,9 @@ const STORAGE_KEYS = {
   LICENSE_API_URL: 'wku_license_api_url',
   LICENSE_DETAILS: 'wku_license_details',
   DEVICE_ID: 'wku_device_id',
-  IS_PREMIUM: 'wku_is_premium'
+  IS_PREMIUM: 'wku_is_premium',
+  GROUP_GRABBER_USAGE: 'wku_group_grabber_usage',
+  GRABBED_CONTACTS: 'wku_grabbed_contacts'
 } as const
 
 const DEFAULT_TEMPLATES: Template[] = [
@@ -216,6 +222,26 @@ export function setCRMContacts(contacts: CRMContact[]): Promise<void> {
   return setStorage<CRMContact[]>(STORAGE_KEYS.CRM_CONTACTS, contacts)
 }
 
+export const DEFAULT_CRM_STAGES: CRMStage[] = [
+  { id: 'lead', name: 'Lead', color: '#3b82f6', isDefault: true },
+  { id: 'prospect', name: 'Prospect', color: '#eab308', isDefault: true },
+  { id: 'customer', name: 'Customer', color: '#22c55e', isDefault: true },
+  { id: 'churned', name: 'Churned', color: '#ef4444', isDefault: true }
+]
+
+export async function getCRMStages(): Promise<CRMStage[]> {
+  const saved = await getStorage<CRMStage[]>(STORAGE_KEYS.CRM_STAGES, DEFAULT_CRM_STAGES)
+  if (!saved || saved.length === 0) {
+    await setStorage(STORAGE_KEYS.CRM_STAGES, DEFAULT_CRM_STAGES)
+    return DEFAULT_CRM_STAGES
+  }
+  return saved
+}
+
+export function setCRMStages(stages: CRMStage[]): Promise<void> {
+  return setStorage<CRMStage[]>(STORAGE_KEYS.CRM_STAGES, stages)
+}
+
 export async function getBroadcastState(): Promise<BroadcastState | null> {
   const state = await getStorage<BroadcastState | null>(STORAGE_KEYS.BROADCAST_STATE, null)
   if (state) {
@@ -384,6 +410,46 @@ export async function addErrorLog(message: string): Promise<void> {
   logs.push(`[${timestamp}] ${message}`)
   if (logs.length > 200) logs.shift()
   await setStorage('wku_error_logs', logs)
+}
+
+export function getCurrentMonthKey(): string {
+  const d = new Date()
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  return `${year}-${month}`
+}
+
+export async function getGroupGrabberUsage(): Promise<GroupGrabberUsage> {
+  const currentKey = getCurrentMonthKey()
+  const usage = await getStorage<GroupGrabberUsage>(STORAGE_KEYS.GROUP_GRABBER_USAGE, {
+    monthKey: currentKey,
+    count: 0
+  })
+  if (!usage || usage.monthKey !== currentKey) {
+    const fresh: GroupGrabberUsage = { monthKey: currentKey, count: 0 }
+    await setStorage(STORAGE_KEYS.GROUP_GRABBER_USAGE, fresh)
+    return fresh
+  }
+  return usage
+}
+
+export async function incrementGroupGrabberUsage(addedCount: number): Promise<GroupGrabberUsage> {
+  const usage = await getGroupGrabberUsage()
+  usage.count += addedCount
+  await setStorage(STORAGE_KEYS.GROUP_GRABBER_USAGE, usage)
+  return usage
+}
+
+export function getGrabbedContacts(): Promise<GrabbedContact[]> {
+  return getStorage<GrabbedContact[]>(STORAGE_KEYS.GRABBED_CONTACTS, [])
+}
+
+export function setGrabbedContacts(contacts: GrabbedContact[]): Promise<void> {
+  return setStorage<GrabbedContact[]>(STORAGE_KEYS.GRABBED_CONTACTS, contacts)
+}
+
+export function clearGrabbedContacts(): Promise<void> {
+  return setStorage<GrabbedContact[]>(STORAGE_KEYS.GRABBED_CONTACTS, [])
 }
 
 export function clearErrorLogs(): Promise<void> {

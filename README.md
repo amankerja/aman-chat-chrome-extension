@@ -135,7 +135,7 @@ Berikut adalah rincian perbandingan fitur secara mendalam antara **Free Tier (Ve
 
 ### 📢 1. Fitur Broadcast Massal (Mass Messaging Engine)
 * **Free Tier**: 
-  - Batas pengiriman maksimal **5 nomor / broadcast**.
+  - Batas pengiriman maksimal **2 nomor / sesi broadcast**.
   - Pengiriman manual standar tanpa opsi batching (jeda pengiriman statis).
   - Tanpa variasi kata acak (Spintax).
 * **Lisensi Pro (Unlimited)**:
@@ -162,7 +162,9 @@ Berikut adalah rincian perbandingan fitur secara mendalam antara **Free Tier (Ve
   - Simpan catatan kontak terbatas.
   - Kategori status kontak dasar.
 * **Lisensi Pro**:
-  - **Pipeline Sales Lengkap**: Pengelompokan stage kontak (`Lead`, `Prospect`, `Customer`, `Churned`).
+  - **Pipeline Sales Dinamis**: Pengelompokan stage kontak yang dapat disesuaikan tanpa batas (tambah stage baru, edit nama & warna, serta hapus stage).
+  - **Klik Kanan Kontak WhatsApp Web (Context Menu)**: Cukup klik kanan pada kontak/obrolan apapun di WhatsApp Web untuk langsung memasukkan atau memindahkan kontak ke stage CRM yang diinginkan.
+  - **Impor Kontak dari Inbox**: Ambil dan saring kontak aktif langsung dari obrolan WhatsApp Web ke dalam database CRM secara instan.
   - **Tugas Follow-up Interaktif**: Pengingat jadwal follow-up pelanggan dengan penanda status *Pending/Done*.
   - **Catatan Kontak Terintegrasi**: Sinkronisasi riwayat catatan khusus langsung di panel WhatsApp Web.
 
@@ -212,7 +214,7 @@ Berikut adalah rincian perbandingan fitur secara mendalam antara **Free Tier (Ve
 | Reminder Follow-up | ❌ | ✅ |
 | Message Templates | 5 | Unlimited |
 | Template Variables | Basic | Advanced |
-| Broadcast | 5/hari | Paket kuota |
+| Broadcast | 2 / sesi | Paket kuota |
 | Batch Sending | ❌ | ✅ |
 | Random Delay | ❌ | ✅ |
 | Spintax | ❌ | ✅ |
